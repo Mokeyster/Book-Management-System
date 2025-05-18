@@ -1,0 +1,106 @@
+.draggable-area {
+  -webkit-app-region: drag;
+  height: 50px; /* Set the height of the draggable area */
+  width: 100%;
+  position: fixed;
+  top: 0;
+  left: 0;
+  background-color: transparent;
+  z-index: 1000; /* Make sure it's at the top */
+  pointer-events: none; /* Ensure that click events on other elements are not affected */
+}
+
+.non-draggable {
+  -webkit-app-region: no-drag;
+  pointer-events: auto;
+}
+
+.no-hover-effect:hover {
+  text-decoration: none !important;
+}
+
+.fade-edges {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    black 10%,
+    black 90%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(to bottom, transparent 0%, black 10%, black 90%, transparent 100%);
+}
+
+.scrollbar-base {
+  @apply rounded-sm scrollbar-track-transparent scrollbar-thumb-muted scrollbar-thumb-rounded-lg scrollbar scrollbar-w-2 scrollbar-h-1;
+}
+
+.scrollbar-base-thin {
+  @apply rounded-sm scrollbar-track-transparent scrollbar-thumb-muted scrollbar-thumb-rounded-lg scrollbar scrollbar-w-1 scrollbar-h-1;
+}
+
+@font-face {
+  font-family: 'Source Han Sans VF';
+  src: url('@assets/fonts/SourceHanSans-VF.otf.ttc') format('truetype-variations');
+  /* Supported word weight ranges */
+  font-weight: 100 900;
+  font-style: normal;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    transform: scale(0);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-out;
+}
+
+.animate-scaleIn {
+  animation: scaleIn 0.3s ease-out;
+}
+
+.img-initial {
+  @layer base {
+    img {
+      display: initial;
+    }
+  }
+}
+
+.background-fade-enter {
+  opacity: 0;
+}
+
+.background-fade-enter-active {
+  opacity: 1;
+  transition: opacity 250ms ease-in-out;
+}
+
+.background-fade-exit {
+  opacity: 1;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.background-fade-exit-active {
+  opacity: 0;
+  transition: opacity 250ms ease-in-out;
+}
