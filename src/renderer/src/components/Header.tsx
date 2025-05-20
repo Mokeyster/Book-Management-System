@@ -1,4 +1,4 @@
-import { Bell, ChevronDown, LogOut, Menu, Moon, Settings, Sun, User } from 'lucide-react'
+import { Bell, ChevronDown, LogOut, Moon, Settings, Sun, User } from 'lucide-react'
 import { useTheme } from '~/hooks/useTheme'
 import { Button } from '@ui/button'
 import {
@@ -13,12 +13,7 @@ import { useAuthStore } from '~/store/authStore'
 import { useNavigate } from 'react-router-dom'
 import { Avatar, AvatarFallback } from '@ui/avatar'
 
-interface HeaderProps {
-  toggleSidebar: () => void
-  sidebarCollapsed: boolean
-}
-
-const Header = ({ toggleSidebar, sidebarCollapsed }: HeaderProps): React.JSX.Element => {
+const Header = (): React.JSX.Element => {
   const { theme, setTheme } = useTheme()
   const { currentUser, logout } = useAuthStore()
   const navigate = useNavigate()
@@ -30,11 +25,7 @@ const Header = ({ toggleSidebar, sidebarCollapsed }: HeaderProps): React.JSX.Ele
 
   return (
     <header className="flex items-center justify-between h-16 px-4 border-b border-border bg-card">
-      <div className="flex items-center">
-        <Button variant="ghost" size="icon" onClick={toggleSidebar}>
-          <Menu className="w-5 h-5" />
-        </Button>
-      </div>
+      <div className="flex items-center"></div>
 
       <div className="flex items-center space-x-3">
         <Button variant="ghost" size="icon" className="text-muted-foreground">
@@ -77,14 +68,8 @@ const Header = ({ toggleSidebar, sidebarCollapsed }: HeaderProps): React.JSX.Ele
                   {currentUser?.real_name?.[0] || currentUser?.username?.[0] || 'U'}
                 </AvatarFallback>
               </Avatar>
-              {!sidebarCollapsed && (
-                <>
-                  <span className="font-medium">
-                    {currentUser?.real_name || currentUser?.username}
-                  </span>
-                  <ChevronDown className="w-4 h-4" />
-                </>
-              )}
+              <span className="font-medium">{currentUser?.real_name || currentUser?.username}</span>
+              <ChevronDown className="w-4 h-4" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
