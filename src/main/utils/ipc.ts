@@ -212,6 +212,18 @@ export function setupIpcHandlers(): void {
     return serviceManager.systemService.backupDatabase()
   })
 
+  ipcMain.handle('system:getAllBackups', async () => {
+    return serviceManager.systemService.getAllBackups()
+  })
+
+  ipcMain.handle('system:deleteBackup', async (_event, backupId: number) => {
+    return serviceManager.systemService.deleteBackup(backupId)
+  })
+
+  ipcMain.handle('system:restoreBackup', async (_event, backupId: number) => {
+    return serviceManager.systemService.restoreBackup(backupId)
+  })
+
   ipcMain.handle('system:getOperationLogs', async (_event, limit = 100, offset = 0) => {
     return serviceManager.systemService.getOperationLogs(limit, offset)
   })

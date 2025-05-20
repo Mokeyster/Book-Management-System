@@ -4,7 +4,13 @@ import { IBook, ITag, IBookCategory } from '../types/bookTypes'
 import { IBorrowRecord, IBorrowRequest, IReservation } from '../types/borrowTypes'
 import { IPublisher } from '../types/publisherTypes'
 import { IReader, IReaderType } from '../types/readerTypes'
-import { ISystemUser, ISystemRole, ISystemConfig, IOperationLog } from '../types/systemTypes'
+import {
+  ISystemUser,
+  ISystemRole,
+  ISystemConfig,
+  IOperationLog,
+  IDataBackup
+} from '../types/systemTypes'
 import { IBookStatistics, IBorrowStatistics, IReaderStatistics } from '../types/statisticsTypes'
 import { IReportResult, IFileDialogResult, ILoginResult, IPasswordChangeResult } from './types'
 
@@ -108,6 +114,11 @@ const api = {
     updateConfig: (configKey: string, configValue: string): Promise<boolean> =>
       ipcRenderer.invoke('system:updateConfig', configKey, configValue),
     backupDatabase: (): Promise<IReportResult> => ipcRenderer.invoke('system:backupDatabase'),
+    getAllBackups: (): Promise<IDataBackup[]> => ipcRenderer.invoke('system:getAllBackups'),
+    deleteBackup: (backupId: number): Promise<{ success: boolean; message: string }> =>
+      ipcRenderer.invoke('system:deleteBackup', backupId),
+    restoreBackup: (backupId: number): Promise<{ success: boolean; message: string }> =>
+      ipcRenderer.invoke('system:restoreBackup', backupId),
     getOperationLogs: (limit?: number, offset?: number): Promise<IOperationLog[]> =>
       ipcRenderer.invoke('system:getOperationLogs', limit, offset)
   },

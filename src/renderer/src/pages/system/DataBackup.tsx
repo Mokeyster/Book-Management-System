@@ -37,7 +37,9 @@ const DataBackup = (): React.ReactElement => {
   const [selectedBackup, setSelectedBackup] = useState<IDataBackup | null>(null)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false)
+  const [isRestoreDialogOpen, setIsRestoreDialogOpen] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [isRestoring, setIsRestoring] = useState(false)
 
   // 加载备份记录
   useEffect(() => {
@@ -57,27 +59,8 @@ const DataBackup = (): React.ReactElement => {
   const fetchBackups = async (): Promise<void> => {
     setLoading(true)
     try {
-      // 这里需要后端提供获取备份记录的 API
-      // 先使用模拟数据
-      const mockBackups: IDataBackup[] = [
-        {
-          backup_id: 1,
-          backup_date: '2025-05-15 14:32:45',
-          backup_path: 'C:\\data\\backups\\library_backup_2025-05-15.db',
-          backup_size: '2.34 MB',
-          operator_id: 1,
-          remark: '手动备份'
-        },
-        {
-          backup_id: 2,
-          backup_date: '2025-05-12 08:00:00',
-          backup_path: 'C:\\data\\backups\\library_backup_2025-05-12.db',
-          backup_size: '2.31 MB',
-          operator_id: 0,
-          remark: '自动备份'
-        }
-      ]
-      setBackups(mockBackups)
+      const backupList = await window.api.system.getAllBackups()
+      setBackups(backupList || [])
     } catch (error) {
       console.error('获取备份记录失败:', error)
       toast.error('获取备份记录失败')
@@ -107,10 +90,31 @@ const DataBackup = (): React.ReactElement => {
     }
   }
 
-  // 恢复备份（这个功能需要谨慎实现）
-  const handleRestoreBackup = (_backup: IDataBackup): void => {
-    // 这里应该显示确认对话框，并执行恢复操作
-    toast.info('还原备份功能需要谨慎实现，暂不提供')
+  // 恢复备份
+  const handleRestoreBackup = async (): Promise<void> => {
+    if (!selectedBackup) return
+
+    setIsRestoring(true)
+    try {
+      const result = await window.api.system.restoreBackup(selectedBackup.backup_id)
+
+      if (result.success) {
+        toast.success('数据库还原成功!')
+        setIsRestoreDialogOpen(false)
+
+        // 显示重要提示
+        toast.info('数据库已还原，建议重启应用以确保所有功能正常。', {
+          duration: 8000
+        })
+      } else {
+        toast.error(`还原失败: ${result.message || '未知错误'}`)
+      }
+    } catch (error) {
+      console.error('恢复备份错误:', error)
+      toast.error('还原数据库时出错')
+    } finally {
+      setIsRestoring(false)
+    }
   }
 
   // 删除备份
@@ -119,16 +123,14 @@ const DataBackup = (): React.ReactElement => {
 
     setIsDeleting(true)
     try {
-      // 这里需要后端提供删除备份的 API
-      // 现在我们模拟成功
-      const result = true
+      const result = await window.api.system.deleteBackup(selectedBackup.backup_id)
 
-      if (result) {
+      if (result.success) {
         toast.success('备份删除成功')
         setBackups((prev) => prev.filter((b) => b.backup_id !== selectedBackup.backup_id))
         setIsDeleteDialogOpen(false)
       } else {
-        toast.error('备份删除失败')
+        toast.error(`备份删除失败: ${result.message || '未知错误'}`)
       }
     } catch (error) {
       console.error('删除备份错误:', error)
@@ -263,7 +265,10 @@ const DataBackup = (): React.ReactElement => {
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  onClick={() => handleRestoreBackup(backup)}
+                                  onClick={() => {
+                                    setSelectedBackup(backup)
+                                    setIsRestoreDialogOpen(true)
+                                  }}
                                 >
                                   <Download className="w-4 h-4" />
                                 </Button>
@@ -408,6 +413,66 @@ const DataBackup = (): React.ReactElement => {
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsDetailsDialogOpen(false)}>
               关闭
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 恢复确认对话框 */}
+      <Dialog open={isRestoreDialogOpen} onOpenChange={setIsRestoreDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>确认还原备份</DialogTitle>
+            <DialogDescription>
+              您确定要将数据库还原到此备份状态吗？此操作将覆盖当前所有数据，无法撤销。系统将自动创建当前数据库的备份。
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedBackup && (
+            <div className="p-4 mt-2 mb-4 border rounded-md bg-muted">
+              <p className="mb-2 font-medium">要还原的备份信息：</p>
+              <div className="space-y-1">
+                <p className="text-sm">
+                  <span className="font-medium">备份ID: </span>
+                  {selectedBackup.backup_id}
+                </p>
+                <p className="text-sm">
+                  <span className="font-medium">备份时间: </span>
+                  {formatDate(selectedBackup.backup_date)}
+                </p>
+                <p className="text-sm">
+                  <span className="font-medium">备份类型: </span>
+                  {selectedBackup.operator_id ? '手动备份' : '自动备份'}
+                </p>
+                <p className="text-sm">
+                  <span className="font-medium">备份大小: </span>
+                  {selectedBackup.backup_size}
+                </p>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsRestoreDialogOpen(false)}>
+              取消
+            </Button>
+            <Button
+              variant="default"
+              className="bg-yellow-600 hover:bg-yellow-700"
+              onClick={handleRestoreBackup}
+              disabled={isRestoring}
+            >
+              {isRestoring ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  恢复中...
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4 mr-2" />
+                  确认恢复备份
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -3,7 +3,7 @@ import crypto from 'crypto'
 import fs from 'fs'
 import path from 'path'
 import { app } from 'electron'
-import { ISystemUser, ISystemRole, ISystemConfig } from '../../types/systemTypes'
+import { ISystemUser, ISystemRole, ISystemConfig, IDataBackup } from '../../types/systemTypes'
 
 export class SystemService {
   private db: Database.Database
@@ -283,6 +283,101 @@ export class SystemService {
       return {
         success: false,
         message: `数据库备份失败: ${error instanceof Error ? error.message : '未知错误'}`
+      }
+    }
+  }
+
+  // 获取所有备份记录
+  getAllBackups(): IDataBackup[] {
+    return this.db
+      .prepare(
+        `
+      SELECT * FROM data_backup
+      ORDER BY backup_date DESC
+    `
+      )
+      .all() as IDataBackup[]
+  }
+
+  // 删除备份
+  deleteBackup(backupId: number): { success: boolean; message: string } {
+    try {
+      // 先获取备份记录
+      const backup = this.db
+        .prepare('SELECT * FROM data_backup WHERE backup_id = ?')
+        .get(backupId) as IDataBackup | undefined
+
+      if (!backup) {
+        return { success: false, message: '备份记录不存在' }
+      }
+
+      // 删除物理文件
+      if (fs.existsSync(backup.backup_path)) {
+        fs.unlinkSync(backup.backup_path)
+      }
+
+      // 删除数据库记录
+      this.db.prepare('DELETE FROM data_backup WHERE backup_id = ?').run(backupId)
+
+      return { success: true, message: '备份删除成功' }
+    } catch (error) {
+      return {
+        success: false,
+        message: `删除备份失败: ${error instanceof Error ? error.message : '未知错误'}`
+      }
+    }
+  }
+
+  // 还原备份
+  restoreBackup(backupId: number): { success: boolean; message: string } {
+    try {
+      // 先获取备份记录
+      const backup = this.db
+        .prepare('SELECT * FROM data_backup WHERE backup_id = ?')
+        .get(backupId) as IDataBackup | undefined
+
+      if (!backup) {
+        return { success: false, message: '备份记录不存在' }
+      }
+
+      // 检查备份文件是否存在
+      if (!fs.existsSync(backup.backup_path)) {
+        return { success: false, message: '备份文件不存在，无法还原' }
+      }
+
+      const currentDbPath = this.db.name
+
+      // 关闭当前数据库连接
+      this.db.close()
+
+      try {
+        // 备份当前数据库(在恢复前创建一个安全备份)
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+        const safeBackupPath = `${currentDbPath}.before_restore_${timestamp}`
+        fs.copyFileSync(currentDbPath, safeBackupPath)
+
+        // 复制备份文件到当前数据库位置
+        fs.copyFileSync(backup.backup_path, currentDbPath)
+
+        // 重新打开数据库连接
+        this.db = new Database(currentDbPath)
+        this.db.pragma('foreign_keys = ON')
+
+        return { success: true, message: '数据库还原成功' }
+      } catch (error) {
+        // 尝试重新打开数据库连接
+        this.db = new Database(currentDbPath)
+        this.db.pragma('foreign_keys = ON')
+
+        return {
+          success: false,
+          message: `还原备份过程中出错: ${error instanceof Error ? error.message : '未知错误'}`
+        }
+      }
+    } catch (error) {
+      return {
+        success: false,
+        message: `还原备份失败: ${error instanceof Error ? error.message : '未知错误'}`
       }
     }
   }

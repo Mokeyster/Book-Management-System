@@ -3,7 +3,13 @@ import { IBook, ITag, IBookCategory } from '../types/bookTypes'
 import { IBorrowRecord, IBorrowRequest, IReservation } from '../types/borrowTypes'
 import { IPublisher } from '../types/publisherTypes'
 import { IReader, IReaderType } from '../types/readerTypes'
-import { ISystemUser, ISystemRole, ISystemConfig, IOperationLog } from '../types/systemTypes'
+import {
+  ISystemUser,
+  ISystemRole,
+  ISystemConfig,
+  IOperationLog,
+  IDataBackup
+} from '../types/systemTypes'
 import { IBookStatistics, IBorrowStatistics, IReaderStatistics } from '../types/statisticsTypes'
 import { IReportResult, IFileDialogResult, ILoginResult, IPasswordChangeResult } from './types'
 
@@ -82,6 +88,9 @@ interface SystemAPI {
   getConfigs: () => Promise<ISystemConfig[]>
   updateConfig: (configKey: string, configValue: string) => Promise<boolean>
   backupDatabase: () => Promise<IReportResult>
+  getAllBackups: () => Promise<IDataBackup[]>
+  deleteBackup: (backupId: number) => Promise<{ success: boolean; message: string }>
+  restoreBackup: (backupId: number) => Promise<{ success: boolean; message: string }>
   getOperationLogs: (limit?: number, offset?: number) => Promise<IOperationLog[]>
 }
 
