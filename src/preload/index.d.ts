@@ -19,7 +19,7 @@ interface BookAPI {
   search: (query: string) => Promise<IBook[]>
   add: (book: IBook) => Promise<number>
   update: (book: IBook) => Promise<boolean>
-  delete: (bookId: number) => Promise<boolean>
+  delete: (bookId: number) => Promise<{ success: boolean; message: string }>
   updateStatus: (bookId: number, status: number) => Promise<boolean>
   getTags: (bookId: number) => Promise<ITag[]>
 
@@ -38,7 +38,7 @@ interface ReaderAPI {
   search: (query: string) => Promise<IReader[]>
   add: (reader: IReader) => Promise<number>
   update: (reader: IReader) => Promise<boolean>
-  delete: (readerId: number) => Promise<boolean>
+  delete: (readerId: number) => Promise<{ success: boolean; message: string }>
   getTypes: () => Promise<IReaderType[]>
   getBorrowHistory: (readerId: number) => Promise<IBorrowRecord[]>
 }
@@ -68,7 +68,7 @@ interface PublisherAPI {
   getById: (publisherId: number) => Promise<IPublisher>
   add: (publisher: IPublisher) => Promise<number>
   update: (publisher: IPublisher) => Promise<boolean>
-  delete: (publisherId: number) => Promise<boolean>
+  delete: (publisherId: number) => Promise<{ success: boolean; message: string }>
 }
 
 interface SystemAPI {

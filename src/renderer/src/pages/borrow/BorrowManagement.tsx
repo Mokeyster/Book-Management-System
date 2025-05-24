@@ -398,10 +398,10 @@ const BorrowManagement = (): React.JSX.Element => {
                               record.status === 1
                                 ? 'default'
                                 : record.status === 2
-                                  ? 'outline' // 修改：将'success'替换为'outline'
+                                  ? 'secondary'
                                   : record.status === 3
                                     ? 'destructive'
-                                    : 'secondary'
+                                    : 'outline'
                             }
                           >
                             {borrowStatusMap[record.status]?.text || `状态${record.status}`}
@@ -412,7 +412,7 @@ const BorrowManagement = (): React.JSX.Element => {
                           {record.fine_amount > 0 ? `¥${record.fine_amount}` : '-'}
                         </TableCell>
                         <TableCell className="text-right">
-                          {record.status === 1 && (
+                          {record.status !== 2 && (
                             <div className="flex justify-end space-x-2">
                               <Button
                                 variant="outline"
@@ -433,7 +433,7 @@ const BorrowManagement = (): React.JSX.Element => {
                                   setSelectedRecord(record)
                                   setIsRenewDialogOpen(true)
                                 }}
-                                disabled={record.renew_count >= 3}
+                                disabled={record.renew_count >= 3 || record.status === 3}
                               >
                                 <RefreshCw className="w-3 h-3 mr-1" />
                                 续借

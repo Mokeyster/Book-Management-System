@@ -99,13 +99,13 @@ const ReaderManagement = (): React.ReactElement => {
     setIsDeleting(true)
     try {
       const result = await window.api.reader.delete(selectedReader.reader_id)
-      if (result) {
+      if (result.success) {
         toast.success('读者删除成功')
         // 更新读者列表
         setReaders((prev) => prev.filter((reader) => reader.reader_id !== selectedReader.reader_id))
         setIsDeleteDialogOpen(false)
       } else {
-        toast.error('读者删除失败')
+        toast.error(result.message)
       }
     } catch (error) {
       console.error('删除读者错误:', error)

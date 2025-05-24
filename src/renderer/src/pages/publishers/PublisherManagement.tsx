@@ -307,14 +307,14 @@ const PublisherManagement = (): React.ReactElement => {
     try {
       const result = await window.api.publisher.delete(selectedPublisher.publisher_id)
 
-      if (result) {
+      if (result.success) {
         toast.success('出版社删除成功')
         setPublishers((prev) =>
           prev.filter((p) => p.publisher_id !== selectedPublisher.publisher_id)
         )
         setIsDeleteDialogOpen(false)
       } else {
-        toast.error('出版社删除失败')
+        toast.error(result.message)
       }
     } catch (error) {
       console.error('删除出版社错误:', error)

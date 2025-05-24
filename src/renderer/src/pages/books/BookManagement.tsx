@@ -99,13 +99,13 @@ const BookManagement = (): React.ReactElement => {
     setIsDeleting(true)
     try {
       const result = await window.api.book.delete(selectedBook.book_id)
-      if (result) {
+      if (result.success) {
         toast.success('图书删除成功')
         // 更新图书列表
         setBooks((prev) => prev.filter((book) => book.book_id !== selectedBook.book_id))
         setIsDeleteDialogOpen(false)
       } else {
-        toast.error('图书删除失败')
+        toast.error(result.message)
       }
     } catch (error) {
       console.error('删除图书错误:', error)

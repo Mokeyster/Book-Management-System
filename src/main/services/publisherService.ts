@@ -80,19 +80,22 @@ export class PublisherService {
   }
 
   // 删除出版社
-  deletePublisher(publisherId: number): boolean {
+  deletePublisher(publisherId: number): { success: boolean; message: string } {
     // 检查是否有关联的图书
     const bookCount = this.db
       .prepare('SELECT COUNT(*) as count FROM book WHERE publisher_id = ?')
       .get(publisherId) as { count: number }
 
     if (bookCount.count > 0) {
-      return false // 存在关联图书，无法删除
+      return { success: false, message: '存在关联图书，无法删除' }
     }
 
     const stmt = this.db.prepare('DELETE FROM publisher WHERE publisher_id = ?')
     const result = stmt.run(publisherId)
-    return result.changes > 0
+    return {
+      success: result.changes > 0,
+      message: result.changes > 0 ? '删除成功' : '出版社不存在'
+    }
   }
 
   // 获取出版社的所有图书

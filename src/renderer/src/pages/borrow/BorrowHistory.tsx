@@ -318,12 +318,10 @@ const BorrowHistory = (): React.ReactElement => {
                           record.status === 1
                             ? 'default'
                             : record.status === 2
-                              ? 'outline'
+                              ? 'secondary'
                               : record.status === 3
                                 ? 'destructive'
-                                : record.status === 4
-                                  ? 'secondary'
-                                  : 'outline'
+                                : 'outline'
                         }
                       >
                         {borrowStatusMap[record.status]?.text || `状态${record.status}`}

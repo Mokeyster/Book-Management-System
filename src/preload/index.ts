@@ -23,7 +23,8 @@ const api = {
     search: (query: string): Promise<IBook[]> => ipcRenderer.invoke('book:search', query),
     add: (book: IBook): Promise<number> => ipcRenderer.invoke('book:add', book),
     update: (book: IBook): Promise<boolean> => ipcRenderer.invoke('book:update', book),
-    delete: (bookId: number): Promise<boolean> => ipcRenderer.invoke('book:delete', bookId),
+    delete: (bookId: number): Promise<{ success: boolean; message: string }> =>
+      ipcRenderer.invoke('book:delete', bookId),
     updateStatus: (bookId: number, status: number): Promise<boolean> =>
       ipcRenderer.invoke('book:updateStatus', bookId, status),
     getTags: (bookId: number): Promise<ITag[]> => ipcRenderer.invoke('book:getTags', bookId),
@@ -48,7 +49,8 @@ const api = {
     search: (query: string): Promise<IReader[]> => ipcRenderer.invoke('reader:search', query),
     add: (reader: IReader): Promise<number> => ipcRenderer.invoke('reader:add', reader),
     update: (reader: IReader): Promise<boolean> => ipcRenderer.invoke('reader:update', reader),
-    delete: (readerId: number): Promise<boolean> => ipcRenderer.invoke('reader:delete', readerId),
+    delete: (readerId: number): Promise<{ success: boolean; message: string }> =>
+      ipcRenderer.invoke('reader:delete', readerId),
     getTypes: (): Promise<IReaderType[]> => ipcRenderer.invoke('reader:getTypes'),
     getBorrowHistory: (readerId: number): Promise<IBorrowRecord[]> =>
       ipcRenderer.invoke('reader:getBorrowHistory', readerId)
@@ -86,7 +88,7 @@ const api = {
     add: (publisher: IPublisher): Promise<number> => ipcRenderer.invoke('publisher:add', publisher),
     update: (publisher: IPublisher): Promise<boolean> =>
       ipcRenderer.invoke('publisher:update', publisher),
-    delete: (publisherId: number): Promise<boolean> =>
+    delete: (publisherId: number): Promise<{ success: boolean; message: string }> =>
       ipcRenderer.invoke('publisher:delete', publisherId)
   },
 

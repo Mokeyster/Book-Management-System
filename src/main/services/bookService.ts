@@ -17,6 +17,7 @@ export class BookService {
       FROM book b
       LEFT JOIN book_category c ON b.category_id = c.category_id
       LEFT JOIN publisher p ON b.publisher_id = p.publisher_id
+      WHERE b.status != 6 -- 6表示已删除
     `
       )
       .all() as IBook[]
@@ -46,7 +47,7 @@ export class BookService {
       FROM book b
       LEFT JOIN book_category c ON b.category_id = c.category_id
       LEFT JOIN publisher p ON b.publisher_id = p.publisher_id
-      WHERE b.title LIKE ? OR b.author LIKE ? OR b.isbn LIKE ?
+      WHERE (b.title LIKE ? OR b.author LIKE ? OR b.isbn LIKE ?) AND b.status != 6
     `
       )
       .all(`%${query}%`, `%${query}%`, `%${query}%`) as IBook[]
@@ -105,11 +106,82 @@ export class BookService {
     return result.changes > 0
   }
 
-  // 删除图书
-  deleteBook(bookId: number): boolean {
-    const stmt = this.db.prepare('DELETE FROM book WHERE book_id = ?')
-    const result = stmt.run(bookId)
-    return result.changes > 0
+  // 软删除图书（将状态设置为"已删除"）
+  deleteBook(bookId: number): { success: boolean; message: string } {
+    try {
+      // 检查是否有未归还的借阅记录
+      const activeBorrows = this.db
+        .prepare(
+          'SELECT COUNT(*) as count FROM borrow_record WHERE book_id = ? AND (status = 1 OR status = 3 OR status = 4)'
+        )
+        .get(bookId) as { count: number }
+
+      if (activeBorrows && activeBorrows.count > 0) {
+        return { success: false, message: '该图书有未归还的借阅记录，不能删除' }
+      }
+
+      // 将图书状态更新为"已删除"(假设用6表示已删除状态)
+      const stmt = this.db.prepare(`
+        UPDATE book SET
+          status = 6,
+          update_time = datetime('now', 'localtime')
+        WHERE book_id = ?
+      `)
+
+      const result = stmt.run(bookId)
+      return {
+        success: result.changes > 0,
+        message: result.changes > 0 ? '删除成功' : '图书不存在'
+      }
+    } catch (error) {
+      console.error('删除图书失败:', error)
+      return { success: false, message: `删除失败: ${(error as Error).message}` }
+    }
+  }
+
+  // 如果需要真正从数据库删除图书（管理员功能）
+  hardDeleteBook(bookId: number): { success: boolean; message: string } {
+    return this.safeDeleteBook(bookId)
+  }
+
+  // 安全删除图书（处理所有外键关系）
+  private safeDeleteBook(bookId: number): { success: boolean; message: string } {
+    try {
+      // 开始事务
+      this.db.exec('BEGIN TRANSACTION')
+
+      // 1. 删除图书标签关联
+      this.db.prepare('DELETE FROM book_tag WHERE book_id = ?').run(bookId)
+
+      // 2. 删除预约记录
+      this.db.prepare('DELETE FROM reservation WHERE book_id = ?').run(bookId)
+
+      // 3. 删除借阅记录
+      this.db.prepare('DELETE FROM borrow_record WHERE book_id = ?').run(bookId)
+
+      // 4. 删除入库记录
+      this.db.prepare('DELETE FROM inventory_in WHERE book_id = ?').run(bookId)
+
+      // 5. 删除出库记录
+      this.db.prepare('DELETE FROM inventory_out WHERE book_id = ?').run(bookId)
+
+      // 6. 最后删除图书本身
+      const stmt = this.db.prepare('DELETE FROM book WHERE book_id = ?')
+      const result = stmt.run(bookId)
+
+      // 提交事务
+      this.db.exec('COMMIT')
+
+      return {
+        success: result.changes > 0,
+        message: result.changes > 0 ? '删除成功' : '图书不存在'
+      }
+    } catch (error) {
+      // 发生错误，回滚事务
+      this.db.exec('ROLLBACK')
+      console.error('删除图书失败:', error)
+      return { success: false, message: `删除失败: ${(error as Error).message}` }
+    }
   }
 
   // 更新图书状态
