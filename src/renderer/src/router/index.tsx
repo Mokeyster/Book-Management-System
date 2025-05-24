@@ -1,5 +1,5 @@
 import { Suspense, lazy } from 'react'
-import { createBrowserRouter, Navigate } from 'react-router-dom'
+import { createHashRouter, Navigate } from 'react-router-dom'
 
 import Layout from '~/components/Layout'
 import Loading from '~/components/Loading'
@@ -26,7 +26,7 @@ const ReportCenter = lazy(() => import('~/pages/reports/ReportCenter'))
 // 路由鉴权组件
 import AuthRoute from './AuthRoute'
 
-export const router = createBrowserRouter([
+export const router = createHashRouter([
   {
     path: '/',
     element: <Navigate to="/dashboard" replace />
