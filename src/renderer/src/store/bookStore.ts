@@ -81,15 +81,15 @@ export const useBookStore = create<BooksState>((set) => ({
   deleteBook: async (bookId) => {
     set({ loading: true, error: null })
     try {
-      const success = await window.api.book.delete(bookId)
-      if (success) {
+      const result = await window.api.book.delete(bookId)
+      if (result.success) {
         // Remove book from store after deleting
         set((state) => ({
           books: state.books.filter((book) => book.book_id !== bookId),
           loading: false
         }))
       }
-      return success
+      return result.success
     } catch (error) {
       console.error('Error deleting book:', error)
       set({ error: 'Failed to delete book', loading: false })

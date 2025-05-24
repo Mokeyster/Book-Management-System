@@ -12,7 +12,11 @@ interface BorrowingState {
   fetchAllBorrows: () => Promise<void>
   fetchCurrentBorrows: () => Promise<void>
   fetchOverdueBorrows: () => Promise<void>
-  borrowBook: (request: IBorrowRequest) => Promise<IBorrowRecord | null>
+  borrowBook: (request: IBorrowRequest) => Promise<{
+    success: boolean
+    message: string
+    borrowId?: number
+  } | null>
   returnBook: (borrowId: number) => Promise<IBorrowRecord | null>
   renewBook: (borrowId: number) => Promise<IBorrowRecord | null>
 
@@ -69,7 +73,7 @@ export const useBorrowingStore = create<BorrowingState>((set, get) => ({
       // Refresh current borrow list
       await get().fetchCurrentBorrows()
       set({ loading: false })
-      return result
+      return result.success ? result : null
     } catch (error) {
       console.error('Error borrowing book:', error)
       set({ error: 'Failed to borrow book', loading: false })

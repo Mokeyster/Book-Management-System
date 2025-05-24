@@ -84,15 +84,15 @@ export const useReaderStore = create<ReadersState>((set) => ({
   deleteReader: async (readerId) => {
     set({ loading: true, error: null })
     try {
-      const success = await window.api.reader.delete(readerId)
-      if (success) {
+      const result = await window.api.reader.delete(readerId)
+      if (result.success) {
         // Remove reader from store after deleting
         set((state) => ({
           readers: state.readers.filter((reader) => reader.reader_id !== readerId),
           loading: false
         }))
       }
-      return success
+      return result.success
     } catch (error) {
       console.error('Error deleting reader:', error)
       set({ error: 'Failed to delete reader', loading: false })

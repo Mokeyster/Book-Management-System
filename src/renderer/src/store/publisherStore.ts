@@ -69,15 +69,15 @@ export const usePublisherStore = create<PublisherState>((set, get) => ({
   deletePublisher: async (publisherId) => {
     set({ loading: true, error: null })
     try {
-      const success = await window.api.publisher.delete(publisherId)
-      if (success) {
+      const result = await window.api.publisher.delete(publisherId)
+      if (result.success) {
         // Remove publisher from store after deleting
         set((state) => ({
           publishers: state.publishers.filter((p) => p.publisher_id !== publisherId),
           loading: false
         }))
       }
-      return success
+      return result.success
     } catch (error) {
       console.error('Error deleting publisher:', error)
       set({ error: 'Failed to delete publisher', loading: false })
