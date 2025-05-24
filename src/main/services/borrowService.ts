@@ -324,7 +324,7 @@ export class BorrowService {
     }
   }
 
-  // 续借图书
+  // 续借图书（不改变借阅状态，只更新到期日期和续借次数）
   renewBook(borrowId: number): { success: boolean; message: string; newDueDate?: string } {
     try {
       // 开始事务

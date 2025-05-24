@@ -27,8 +27,7 @@ export const readerStatusMap = {
 export const borrowStatusMap = {
   1: { text: '借出', color: 'bg-blue-500' },
   2: { text: '归还', color: 'bg-green-500' },
-  3: { text: '逾期', color: 'bg-red-500' },
-  4: { text: '续借', color: 'bg-yellow-500' }
+  3: { text: '逾期', color: 'bg-red-500' }
 }
 
 // 用户状态映射

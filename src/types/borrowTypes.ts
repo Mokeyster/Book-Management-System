@@ -14,7 +14,7 @@ export interface IBorrowRecord {
   return_date?: string
   renew_count: number
   fine_amount: number
-  status: number // 1:借出, 2:已归还, 3:逾期, 4:续借
+  status: number // 1:借出, 2:已归还, 3:逾期
   operator_id?: number
   message?: string
 }
