@@ -244,58 +244,98 @@ export class StatisticsService {
     }
   }
 
+  // 辅助函数：生成Excel友好的CSV文件
+  private generateExcelFriendlyCsv(
+    data: any[],
+    headers: string,
+    filePath: string,
+    textFields: string[] = [] // 需要强制作为文本处理的字段名
+  ): void {
+    let csvContent = headers + '\n'
+
+    data.forEach((row) => {
+      const rowValues: string[] = []
+
+      // 处理每个字段
+      Object.entries(row).forEach(([key, value]) => {
+        // 检查是否需要强制作为文本处理
+        const forceText = textFields.includes(key)
+
+        if (value === null || value === undefined) {
+          rowValues.push('""')
+        } else if (forceText) {
+          // 强制作为文本处理
+          const str = String(value).replace(/"/g, '""')
+          rowValues.push(`="${str}"`)
+        } else {
+          // 普通处理
+          const str = String(value).replace(/"/g, '""')
+          rowValues.push(`"${str}"`)
+        }
+      })
+
+      csvContent += rowValues.join(',') + '\n'
+    })
+
+    // 添加BOM标记并写入文件
+    const BOM = '\ufeff'
+    fs.writeFileSync(filePath, BOM + csvContent, 'utf8')
+  }
+
+  // 确保报表目录存在
+  private ensureReportsDirectory(): string {
+    const reportsDir = path.join(app.getPath('userData'), 'reports')
+    if (!fs.existsSync(reportsDir)) {
+      fs.mkdirSync(reportsDir, { recursive: true })
+    }
+    return reportsDir
+  }
+
   // 生成借阅记录报表
   generateBorrowReport(startDate: string, endDate: string, operatorId: number): IReportResult {
     try {
       const reportData = this.db
         .prepare(
           `
-        SELECT
-          br.borrow_id, br.borrow_date, br.due_date, br.return_date, br.status,
-          b.isbn, b.title as book_title, b.author,
-          r.name as reader_name, r.id_card, r.phone,
-          u.username as operator_name
-        FROM borrow_record br
-        JOIN book b ON br.book_id = b.book_id
-        JOIN reader r ON br.reader_id = r.reader_id
-        LEFT JOIN system_user u ON br.operator_id = u.user_id
-        WHERE br.borrow_date BETWEEN ? AND ?
-        ORDER BY br.borrow_date DESC
-      `
+          SELECT
+            br.borrow_id, br.borrow_date, br.due_date, br.return_date, br.status,
+            b.isbn, b.title as book_title, b.author,
+            r.name as reader_name, r.id_card, r.phone,
+            u.username as operator_name
+          FROM borrow_record br
+          JOIN book b ON br.book_id = b.book_id
+          JOIN reader r ON br.reader_id = r.reader_id
+          LEFT JOIN system_user u ON br.operator_id = u.user_id
+          WHERE br.borrow_date BETWEEN ? AND ?
+          ORDER BY br.borrow_date DESC
+        `
         )
         .all(startDate, endDate) as IBorrowReportData[]
 
-      // 创建CSV数据
-      let csvContent =
-        '借阅ID,图书ISBN,图书名称,作者,读者姓名,借阅日期,应还日期,实际归还日期,状态,操作员\n'
-
-      reportData.forEach((record: IBorrowReportData) => {
-        const status = ['未知', '借出', '已归还', '逾期', '续借'][record.status] || '未知'
-        csvContent += `${record.borrow_id},${record.isbn || ''},${record.book_title || ''},${record.author || ''},${record.reader_name || ''},${record.borrow_date || ''},${record.due_date || ''},${record.return_date || ''},${status},${record.operator_name || ''}\n`
-      })
-
       // 确保报表目录存在
-      const reportsDir = path.join(app.getPath('userData'), 'reports')
-      if (!fs.existsSync(reportsDir)) {
-        fs.mkdirSync(reportsDir, { recursive: true })
-      }
+      const reportsDir = this.ensureReportsDirectory()
 
       // 生成文件名和路径
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
       const fileName = `borrow_report_${startDate}_to_${endDate}_${timestamp}.csv`
       const filePath = path.join(reportsDir, fileName)
 
-      // 写入文件
-      fs.writeFileSync(filePath, csvContent, 'utf8')
+      // 生成CSV文件，标记需要作为文本处理的字段
+      this.generateExcelFriendlyCsv(
+        reportData,
+        '借阅ID,图书ISBN,图书名称,作者,读者姓名,借阅日期,应还日期,实际归还日期,状态,操作员',
+        filePath,
+        ['isbn', 'id_card', 'phone'] // 需要作为文本处理的字段
+      )
 
       // 记录报表信息
       this.db
         .prepare(
           `
-        INSERT INTO stat_report (
-          report_name, report_type, stats_period, operator_id, report_path
-        ) VALUES (?, ?, ?, ?, ?)
-      `
+          INSERT INTO stat_report (
+            report_name, report_type, stats_period, operator_id, report_path
+          ) VALUES (?, ?, ?, ?, ?)
+        `
         )
         .run(
           `借阅记录报表 (${startDate} 至 ${endDate})`,
@@ -320,56 +360,51 @@ export class StatisticsService {
       const reportData = this.db
         .prepare(
           `
-        SELECT
-          b.book_id, b.isbn, b.title, b.author, b.publish_date, b.price,
-          p.name as publisher_name,
-          c.category_name,
-          b.location, b.status,
-          CASE
-            WHEN b.status = 1 THEN '在库'
-            WHEN b.status = 2 THEN '借出'
-            WHEN b.status = 3 THEN '预约'
-            WHEN b.status = 4 THEN '损坏'
-            WHEN b.status = 5 THEN '丢失'
-            ELSE '未知'
-          END as status_name
-        FROM book b
-        LEFT JOIN publisher p ON b.publisher_id = p.publisher_id
-        LEFT JOIN book_category c ON b.category_id = c.category_id
-        ORDER BY b.book_id
-      `
+          SELECT
+            b.book_id, b.isbn, b.title, b.author, b.publish_date, b.price,
+            p.name as publisher_name,
+            c.category_name,
+            b.location, b.status,
+            CASE
+              WHEN b.status = 1 THEN '在库'
+              WHEN b.status = 2 THEN '借出'
+              WHEN b.status = 3 THEN '预约'
+              WHEN b.status = 4 THEN '损坏'
+              WHEN b.status = 5 THEN '丢失'
+              ELSE '未知'
+            END as status_name
+          FROM book b
+          LEFT JOIN publisher p ON b.publisher_id = p.publisher_id
+          LEFT JOIN book_category c ON b.category_id = c.category_id
+          ORDER BY b.book_id
+        `
         )
         .all() as IInventoryReportData[]
 
-      // 创建CSV数据
-      let csvContent = '图书ID,ISBN,书名,作者,出版社,分类,出版日期,价格,馆内位置,状态\n'
-
-      reportData.forEach((book: IInventoryReportData) => {
-        csvContent += `${book.book_id},${book.isbn || ''},${book.title || ''},${book.author || ''},${book.publisher_name || ''},${book.category_name || ''},${book.publish_date || ''},${book.price || ''},${book.location || ''},${book.status_name || ''}\n`
-      })
-
       // 确保报表目录存在
-      const reportsDir = path.join(app.getPath('userData'), 'reports')
-      if (!fs.existsSync(reportsDir)) {
-        fs.mkdirSync(reportsDir, { recursive: true })
-      }
+      const reportsDir = this.ensureReportsDirectory()
 
       // 生成文件名和路径
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
       const fileName = `inventory_report_${timestamp}.csv`
       const filePath = path.join(reportsDir, fileName)
 
-      // 写入文件
-      fs.writeFileSync(filePath, csvContent, 'utf8')
+      // 生成CSV文件，标记需要作为文本处理的字段
+      this.generateExcelFriendlyCsv(
+        reportData,
+        '图书ID,ISBN,书名,作者,出版社,分类,出版日期,价格,馆内位置,状态',
+        filePath,
+        ['isbn', 'book_id'] // 需要作为文本处理的字段
+      )
 
       // 记录报表信息
       this.db
         .prepare(
           `
-        INSERT INTO stat_report (
-          report_name, report_type, stats_period, operator_id, report_path
-        ) VALUES (?, ?, ?, ?, ?)
-      `
+          INSERT INTO stat_report (
+            report_name, report_type, stats_period, operator_id, report_path
+          ) VALUES (?, ?, ?, ?, ?)
+        `
         )
         .run(
           `库存报表`,
@@ -394,55 +429,49 @@ export class StatisticsService {
       const reportData = this.db
         .prepare(
           `
-        SELECT
-          r.reader_id, r.name, r.gender, r.id_card, r.phone, r.email,
-          r.register_date, r.borrow_quota,
-          rt.type_name,
-          CASE
-            WHEN r.status = 1 THEN '正常'
-            WHEN r.status = 2 THEN '暂停'
-            WHEN r.status = 3 THEN '注销'
-            ELSE '未知'
-          END as status_name,
-          (SELECT COUNT(*) FROM borrow_record WHERE reader_id = r.reader_id) as borrow_count,
-          (SELECT COUNT(*) FROM borrow_record WHERE reader_id = r.reader_id AND status = 1) as current_borrow_count
-        FROM reader r
-        LEFT JOIN reader_type rt ON r.type_id = rt.type_id
-        ORDER BY r.reader_id
-      `
+          SELECT
+            r.reader_id, r.name, r.gender, r.id_card, r.phone, r.email,
+            r.register_date, r.borrow_quota,
+            rt.type_name,
+            CASE
+              WHEN r.status = 1 THEN '正常'
+              WHEN r.status = 2 THEN '暂停'
+              WHEN r.status = 3 THEN '注销'
+              ELSE '未知'
+            END as status_name,
+            (SELECT COUNT(*) FROM borrow_record WHERE reader_id = r.reader_id) as borrow_count,
+            (SELECT COUNT(*) FROM borrow_record WHERE reader_id = r.reader_id AND status = 1) as current_borrow_count
+          FROM reader r
+          LEFT JOIN reader_type rt ON r.type_id = rt.type_id
+          ORDER BY r.reader_id
+        `
         )
         .all() as IReaderReportData[]
 
-      // 创建CSV数据
-      let csvContent =
-        '读者ID,姓名,性别,证件号,电话,邮箱,注册日期,读者类型,状态,借阅限额,历史借阅次数,当前借阅数\n'
-
-      reportData.forEach((reader: IReaderReportData) => {
-        csvContent += `${reader.reader_id},${reader.name || ''},${reader.gender || ''},${reader.id_card || ''},${reader.phone || ''},${reader.email || ''},${reader.register_date || ''},${reader.type_name || ''},${reader.status_name || ''},${reader.borrow_quota || ''},${reader.borrow_count || 0},${reader.current_borrow_count || 0}\n`
-      })
-
       // 确保报表目录存在
-      const reportsDir = path.join(app.getPath('userData'), 'reports')
-      if (!fs.existsSync(reportsDir)) {
-        fs.mkdirSync(reportsDir, { recursive: true })
-      }
+      const reportsDir = this.ensureReportsDirectory()
 
       // 生成文件名和路径
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
       const fileName = `reader_report_${timestamp}.csv`
       const filePath = path.join(reportsDir, fileName)
 
-      // 写入文件
-      fs.writeFileSync(filePath, csvContent, 'utf8')
+      // 生成CSV文件，标记需要作为文本处理的字段
+      this.generateExcelFriendlyCsv(
+        reportData,
+        '读者ID,姓名,性别,证件号,电话,邮箱,注册日期,读者类型,状态,借阅限额,历史借阅次数,当前借阅数',
+        filePath,
+        ['id_card', 'phone', 'reader_id'] // 需要作为文本处理的字段
+      )
 
       // 记录报表信息
       this.db
         .prepare(
           `
-        INSERT INTO stat_report (
-          report_name, report_type, stats_period, operator_id, report_path
-        ) VALUES (?, ?, ?, ?, ?)
-      `
+          INSERT INTO stat_report (
+            report_name, report_type, stats_period, operator_id, report_path
+          ) VALUES (?, ?, ?, ?, ?)
+        `
         )
         .run(
           `读者统计报表`,
@@ -467,50 +496,44 @@ export class StatisticsService {
       const reportData = this.db
         .prepare(
           `
-        SELECT
-          br.borrow_id, br.borrow_date, br.due_date,
-          julianday('now') - julianday(br.due_date) as overdue_days,
-          b.isbn, b.title as book_title, b.author,
-          r.name as reader_name, r.id_card, r.phone, r.email
-        FROM borrow_record br
-        JOIN book b ON br.book_id = b.book_id
-        JOIN reader r ON br.reader_id = r.reader_id
-        WHERE br.status = 3
-        ORDER BY overdue_days DESC
-      `
+          SELECT
+            br.borrow_id, br.borrow_date, br.due_date,
+            julianday('now') - julianday(br.due_date) as overdue_days,
+            b.isbn, b.title as book_title, b.author,
+            r.name as reader_name, r.id_card, r.phone, r.email
+          FROM borrow_record br
+          JOIN book b ON br.book_id = b.book_id
+          JOIN reader r ON br.reader_id = r.reader_id
+          WHERE br.status = 3
+          ORDER BY overdue_days DESC
+        `
         )
         .all() as IOverdueReportData[]
 
-      // 创建CSV数据
-      let csvContent =
-        '借阅ID,图书ISBN,图书名称,作者,读者姓名,读者证件号,联系电话,邮箱,借阅日期,应还日期,逾期天数\n'
-
-      reportData.forEach((record: IOverdueReportData) => {
-        csvContent += `${record.borrow_id},${record.isbn || ''},${record.book_title || ''},${record.author || ''},${record.reader_name || ''},${record.id_card || ''},${record.phone || ''},${record.email || ''},${record.borrow_date || ''},${record.due_date || ''},${Math.floor(record.overdue_days) || 0}\n`
-      })
-
       // 确保报表目录存在
-      const reportsDir = path.join(app.getPath('userData'), 'reports')
-      if (!fs.existsSync(reportsDir)) {
-        fs.mkdirSync(reportsDir, { recursive: true })
-      }
+      const reportsDir = this.ensureReportsDirectory()
 
       // 生成文件名和路径
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
       const fileName = `overdue_report_${timestamp}.csv`
       const filePath = path.join(reportsDir, fileName)
 
-      // 写入文件
-      fs.writeFileSync(filePath, csvContent, 'utf8')
+      // 生成CSV文件，标记需要作为文本处理的字段
+      this.generateExcelFriendlyCsv(
+        reportData,
+        '借阅ID,图书ISBN,图书名称,作者,读者姓名,读者证件号,联系电话,邮箱,借阅日期,应还日期,逾期天数',
+        filePath,
+        ['isbn', 'id_card', 'phone', 'borrow_id'] // 需要作为文本处理的字段
+      )
 
       // 记录报表信息
       this.db
         .prepare(
           `
-        INSERT INTO stat_report (
-          report_name, report_type, stats_period, operator_id, report_path
-        ) VALUES (?, ?, ?, ?, ?)
-      `
+          INSERT INTO stat_report (
+            report_name, report_type, stats_period, operator_id, report_path
+          ) VALUES (?, ?, ?, ?, ?)
+        `
         )
         .run(
           `逾期未还报表`,
