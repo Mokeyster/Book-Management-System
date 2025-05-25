@@ -21,24 +21,29 @@ const api = {
     getAll: (): Promise<IBook[]> => ipcRenderer.invoke('book:getAll'),
     getById: (bookId: number): Promise<IBook> => ipcRenderer.invoke('book:getById', bookId),
     search: (query: string): Promise<IBook[]> => ipcRenderer.invoke('book:search', query),
-    add: (book: IBook): Promise<number> => ipcRenderer.invoke('book:add', book),
-    update: (book: IBook): Promise<boolean> => ipcRenderer.invoke('book:update', book),
-    delete: (bookId: number): Promise<{ success: boolean; message: string }> =>
-      ipcRenderer.invoke('book:delete', bookId),
-    updateStatus: (bookId: number, status: number): Promise<boolean> =>
-      ipcRenderer.invoke('book:updateStatus', bookId, status),
+    add: (book: IBook, userId?: number): Promise<number> =>
+      ipcRenderer.invoke('book:add', book, userId),
+    update: (book: IBook, userId?: number): Promise<boolean> =>
+      ipcRenderer.invoke('book:update', book, userId),
+    delete: (bookId: number, userId?: number): Promise<{ success: boolean; message: string }> =>
+      ipcRenderer.invoke('book:delete', bookId, userId),
+    updateStatus: (bookId: number, status: number, userId?: number): Promise<boolean> =>
+      ipcRenderer.invoke('book:updateStatus', bookId, status, userId),
     getTags: (bookId: number): Promise<ITag[]> => ipcRenderer.invoke('book:getTags', bookId),
 
     // 图书分类相关
     getAllCategories: (): Promise<IBookCategory[]> => ipcRenderer.invoke('book:getAllCategories'),
     getCategoryById: (categoryId: number): Promise<IBookCategory> =>
       ipcRenderer.invoke('book:getCategoryById', categoryId),
-    addCategory: (category: IBookCategory): Promise<number> =>
-      ipcRenderer.invoke('book:addCategory', category),
-    updateCategory: (category: IBookCategory): Promise<boolean> =>
-      ipcRenderer.invoke('book:updateCategory', category),
-    deleteCategory: (categoryId: number): Promise<{ success: boolean; message: string }> =>
-      ipcRenderer.invoke('book:deleteCategory', categoryId),
+    addCategory: (category: IBookCategory, userId?: number): Promise<number> =>
+      ipcRenderer.invoke('book:addCategory', category, userId),
+    updateCategory: (category: IBookCategory, userId?: number): Promise<boolean> =>
+      ipcRenderer.invoke('book:updateCategory', category, userId),
+    deleteCategory: (
+      categoryId: number,
+      userId?: number
+    ): Promise<{ success: boolean; message: string }> =>
+      ipcRenderer.invoke('book:deleteCategory', categoryId, userId),
     getCategoryTree: (): Promise<IBookCategory[]> => ipcRenderer.invoke('book:getCategoryTree')
   },
 
@@ -47,10 +52,12 @@ const api = {
     getAll: (): Promise<IReader[]> => ipcRenderer.invoke('reader:getAll'),
     getById: (readerId: number): Promise<IReader> => ipcRenderer.invoke('reader:getById', readerId),
     search: (query: string): Promise<IReader[]> => ipcRenderer.invoke('reader:search', query),
-    add: (reader: IReader): Promise<number> => ipcRenderer.invoke('reader:add', reader),
-    update: (reader: IReader): Promise<boolean> => ipcRenderer.invoke('reader:update', reader),
-    delete: (readerId: number): Promise<{ success: boolean; message: string }> =>
-      ipcRenderer.invoke('reader:delete', readerId),
+    add: (reader: IReader, userId?: number): Promise<number> =>
+      ipcRenderer.invoke('reader:add', reader, userId),
+    update: (reader: IReader, userId?: number): Promise<boolean> =>
+      ipcRenderer.invoke('reader:update', reader, userId),
+    delete: (readerId: number, userId?: number): Promise<{ success: boolean; message: string }> =>
+      ipcRenderer.invoke('reader:delete', readerId, userId),
     getTypes: (): Promise<IReaderType[]> => ipcRenderer.invoke('reader:getTypes'),
     getBorrowHistory: (readerId: number): Promise<IBorrowRecord[]> =>
       ipcRenderer.invoke('reader:getBorrowHistory', readerId)
@@ -63,12 +70,12 @@ const api = {
     getOverdue: (): Promise<IBorrowRecord[]> => ipcRenderer.invoke('borrow:getOverdue'),
     getBookBorrowHistory: (bookId: number): Promise<IBorrowRecord[]> =>
       ipcRenderer.invoke('borrow:getBookBorrowHistory', bookId),
-    borrowBook: (borrowRequest: IBorrowRequest): Promise<IBorrowRecord> =>
-      ipcRenderer.invoke('borrow:borrowBook', borrowRequest),
-    returnBook: (borrowId: number): Promise<IBorrowRecord> =>
-      ipcRenderer.invoke('borrow:returnBook', borrowId),
-    renewBook: (borrowId: number): Promise<IBorrowRecord> =>
-      ipcRenderer.invoke('borrow:renewBook', borrowId)
+    borrowBook: (borrowRequest: IBorrowRequest, userId?: number): Promise<IBorrowRecord> =>
+      ipcRenderer.invoke('borrow:borrowBook', borrowRequest, userId),
+    returnBook: (borrowId: number, userId?: number): Promise<IBorrowRecord> =>
+      ipcRenderer.invoke('borrow:returnBook', borrowId, userId),
+    renewBook: (borrowId: number, userId?: number): Promise<IBorrowRecord> =>
+      ipcRenderer.invoke('borrow:renewBook', borrowId, userId)
   },
 
   // 预约相关API
@@ -122,7 +129,14 @@ const api = {
     restoreBackup: (backupId: number): Promise<{ success: boolean; message: string }> =>
       ipcRenderer.invoke('system:restoreBackup', backupId),
     getOperationLogs: (limit?: number, offset?: number): Promise<IOperationLog[]> =>
-      ipcRenderer.invoke('system:getOperationLogs', limit, offset)
+      ipcRenderer.invoke('system:getOperationLogs', limit, offset),
+    exportOperationLogs: (filters?: {
+      startDate?: string
+      endDate?: string
+      userId?: number
+      operation?: string
+    }): Promise<{ success: boolean; message: string; filePath?: string }> =>
+      ipcRenderer.invoke('system:exportOperationLogs', filters)
   },
 
   // 统计报表相关API

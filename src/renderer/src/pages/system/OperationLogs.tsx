@@ -47,7 +47,7 @@ const OperationLogs = (): React.ReactElement => {
   const [filterUser, setFilterUser] = useState<string | undefined>(undefined)
   const [filterOperation, setFilterOperation] = useState<string | undefined>(undefined)
 
-  // 操作类型列表
+  // 操作类型列表 - 使用英文关键词，直接匹配数据库中的英文操作描述
   const operationTypes = [
     { value: 'login', label: '用户登录' },
     { value: 'logout', label: '用户退出' },
@@ -56,9 +56,33 @@ const OperationLogs = (): React.ReactElement => {
     { value: 'delete', label: '删除数据' },
     { value: 'borrow', label: '借阅操作' },
     { value: 'return', label: '归还操作' },
+    { value: 'renew', label: '续借操作' },
+    { value: 'reserve', label: '预约操作' },
     { value: 'backup', label: '数据备份' },
-    { value: 'config', label: '配置修改' }
+    { value: 'config', label: '配置修改' },
+    { value: 'import', label: '数据导入' },
+    { value: 'export', label: '数据导出' }
   ]
+
+  // 英文操作类型到数据库关键词的映射
+  const getEnglishKeywords = (englishType: string): string[] => {
+    const keywordMap: Record<string, string[]> = {
+      login: ['login'],
+      logout: ['logout'],
+      add: ['add'],
+      update: ['update'],
+      delete: ['delete'],
+      borrow: ['borrow'],
+      return: ['return'],
+      renew: ['renew'],
+      reserve: ['reserve'],
+      backup: ['backup'],
+      config: ['config'],
+      import: ['import'],
+      export: ['export']
+    }
+    return keywordMap[englishType] || []
+  }
 
   // 加载操作日志
   useEffect(() => {
@@ -128,7 +152,10 @@ const OperationLogs = (): React.ReactElement => {
 
     // 操作类型过滤
     if (filterOperation) {
-      filtered = filtered.filter((log) => log.operation.includes(filterOperation))
+      const englishKeywords = getEnglishKeywords(filterOperation)
+      filtered = filtered.filter((log) =>
+        englishKeywords.some((keyword) => log.operation.includes(keyword))
+      )
     }
 
     setFilteredLogs(filtered)
@@ -139,13 +166,27 @@ const OperationLogs = (): React.ReactElement => {
   const handleExportLogs = async (): Promise<void> => {
     setIsExporting(true)
     try {
-      // 这里需要实现日志导出功能
-      // 可以通过调用API来生成导出文件
+      // 构建过滤条件
+      const filters: any = {}
 
-      // 模拟导出过程
-      await new Promise((resolve) => setTimeout(resolve, 1500))
+      if (filterDate) {
+        filters.startDate = format(filterDate, 'yyyy-MM-dd')
+        filters.endDate = format(filterDate, 'yyyy-MM-dd')
+      }
 
-      toast.success('操作日志导出成功')
+      if (filterOperation) {
+        // 将英文操作类型转换为英文关键词进行过滤
+        const englishKeywords = getEnglishKeywords(filterOperation)
+        filters.operation = englishKeywords[0] // 使用第一个英文关键词
+      }
+
+      const result = await window.api.system.exportOperationLogs(filters)
+
+      if (result.success) {
+        toast.success(result.message)
+      } else {
+        toast.error(result.message)
+      }
     } catch (error) {
       console.error('导出操作日志失败:', error)
       toast.error('导出操作日志失败')
@@ -162,48 +203,60 @@ const OperationLogs = (): React.ReactElement => {
     setFilterOperation(undefined)
   }
 
-  // 格式化操作类型显示
+  // 格式化操作类型显示 - 基于英文操作描述
   const getOperationBadge = (operation: string): React.ReactNode => {
-    if (operation.includes('login')) {
+    const lowerOperation = operation.toLowerCase()
+
+    if (lowerOperation.includes('login')) {
       return <Badge variant="outline">登录</Badge>
-    } else if (operation.includes('logout')) {
+    } else if (lowerOperation.includes('logout')) {
       return <Badge variant="outline">登出</Badge>
-    } else if (
-      operation.includes('添加') ||
-      operation.includes('新增') ||
-      operation.includes('add')
-    ) {
+    } else if (lowerOperation.includes('add')) {
       return <Badge variant="default">添加</Badge>
-    } else if (
-      operation.includes('更新') ||
-      operation.includes('修改') ||
-      operation.includes('update')
-    ) {
+    } else if (lowerOperation.includes('update')) {
       return <Badge variant="secondary">更新</Badge>
-    } else if (operation.includes('删除') || operation.includes('delete')) {
+    } else if (lowerOperation.includes('delete')) {
       return <Badge variant="destructive">删除</Badge>
-    } else if (operation.includes('借阅') || operation.includes('borrow')) {
+    } else if (lowerOperation.includes('borrow')) {
       return (
         <Badge variant="default" className="bg-blue-500">
           借阅
         </Badge>
       )
-    } else if (operation.includes('归还') || operation.includes('return')) {
+    } else if (lowerOperation.includes('return')) {
       return (
         <Badge variant="default" className="bg-green-500">
           归还
         </Badge>
       )
-    } else if (operation.includes('备份') || operation.includes('backup')) {
+    } else if (lowerOperation.includes('renew')) {
+      return (
+        <Badge variant="default" className="bg-orange-500">
+          续借
+        </Badge>
+      )
+    } else if (lowerOperation.includes('reserve')) {
+      return (
+        <Badge variant="default" className="bg-cyan-500">
+          预约
+        </Badge>
+      )
+    } else if (lowerOperation.includes('backup')) {
       return (
         <Badge variant="default" className="bg-purple-500">
           备份
         </Badge>
       )
-    } else if (operation.includes('配置') || operation.includes('config')) {
+    } else if (lowerOperation.includes('config')) {
       return (
         <Badge variant="default" className="bg-yellow-500">
           配置
+        </Badge>
+      )
+    } else if (lowerOperation.includes('import') || lowerOperation.includes('export')) {
+      return (
+        <Badge variant="default" className="bg-indigo-500">
+          数据传输
         </Badge>
       )
     }
@@ -216,18 +269,18 @@ const OperationLogs = (): React.ReactElement => {
         <h1 className="text-2xl font-bold">操作日志</h1>
         <div className="flex items-center space-x-2">
           <Button variant="outline" onClick={fetchLogs}>
-            <RefreshCw className="mr-2 h-4 w-4" />
+            <RefreshCw className="w-4 h-4 mr-2" />
             刷新
           </Button>
           <Button onClick={handleExportLogs} disabled={isExporting}>
             {isExporting ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                 导出中...
               </>
             ) : (
               <>
-                <FileText className="mr-2 h-4 w-4" />
+                <FileText className="w-4 h-4 mr-2" />
                 导出日志
               </>
             )}
@@ -241,12 +294,12 @@ const OperationLogs = (): React.ReactElement => {
           <CardDescription>系统操作日志统计信息</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="bg-muted rounded-md p-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+            <div className="p-4 rounded-md bg-muted">
               <p className="text-sm font-medium text-muted-foreground">总日志数</p>
               <p className="text-lg font-bold">{totalLogs}</p>
             </div>
-            <div className="bg-muted rounded-md p-4">
+            <div className="p-4 rounded-md bg-muted">
               <p className="text-sm font-medium text-muted-foreground">今日操作</p>
               <p className="text-lg font-bold">
                 {
@@ -257,22 +310,28 @@ const OperationLogs = (): React.ReactElement => {
                 }
               </p>
             </div>
-            <div className="bg-muted rounded-md p-4">
+            <div className="p-4 rounded-md bg-muted">
               <p className="text-sm font-medium text-muted-foreground">用户登录</p>
               <p className="text-lg font-bold">
-                {logs.filter((log) => log.operation.includes('login')).length}
+                {
+                  logs.filter((log) =>
+                    getEnglishKeywords('login').some((keyword) => log.operation.includes(keyword))
+                  ).length
+                }
               </p>
             </div>
-            <div className="bg-muted rounded-md p-4">
+            <div className="p-4 rounded-md bg-muted">
               <p className="text-sm font-medium text-muted-foreground">数据操作</p>
               <p className="text-lg font-bold">
                 {
-                  logs.filter(
-                    (log) =>
-                      log.operation.includes('添加') ||
-                      log.operation.includes('更新') ||
-                      log.operation.includes('删除')
-                  ).length
+                  logs.filter((log) => {
+                    const dataOperationKeywords = [
+                      ...getEnglishKeywords('add'),
+                      ...getEnglishKeywords('update'),
+                      ...getEnglishKeywords('delete')
+                    ]
+                    return dataOperationKeywords.some((keyword) => log.operation.includes(keyword))
+                  }).length
                 }
               </p>
             </div>
@@ -299,7 +358,7 @@ const OperationLogs = (): React.ReactElement => {
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" size="sm">
-                <Calendar className="mr-2 h-4 w-4" />
+                <Calendar className="w-4 h-4 mr-2" />
                 {filterDate ? format(filterDate, 'yyyy-MM-dd') : '选择日期'}
               </Button>
             </PopoverTrigger>
@@ -317,7 +376,7 @@ const OperationLogs = (): React.ReactElement => {
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" size="sm">
-                <Filter className="mr-2 h-4 w-4" />
+                <Filter className="w-4 h-4 mr-2" />
                 {filterOperation || '操作类型'}
               </Button>
             </PopoverTrigger>
@@ -349,7 +408,7 @@ const OperationLogs = (): React.ReactElement => {
               清除所有过滤
             </Button>
           )}
-          <span className="text-sm text-muted-foreground ml-2">
+          <span className="ml-2 text-sm text-muted-foreground">
             共 {filteredLogs.length} 条记录
           </span>
         </div>
@@ -358,13 +417,13 @@ const OperationLogs = (): React.ReactElement => {
       <Separator />
 
       {loading ? (
-        <div className="flex justify-center items-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
           <p className="ml-2 text-lg text-muted-foreground">加载操作日志中...</p>
         </div>
       ) : filteredLogs.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-64 space-y-2">
-          <FileText className="h-10 w-10 text-muted-foreground" />
+          <FileText className="w-10 h-10 text-muted-foreground" />
           <p className="text-lg text-muted-foreground">
             {searchQuery || filterDate || filterUser || filterOperation
               ? '没有找到匹配的日志记录'
@@ -373,7 +432,7 @@ const OperationLogs = (): React.ReactElement => {
         </div>
       ) : (
         <>
-          <div className="rounded-md border">
+          <div className="border rounded-md">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -393,7 +452,7 @@ const OperationLogs = (): React.ReactElement => {
                     <TableCell>{formatDate(log.operation_time)}</TableCell>
                     <TableCell>
                       <div className="flex items-center">
-                        <User className="h-4 w-4 mr-1 text-muted-foreground" />
+                        <User className="w-4 h-4 mr-1 text-muted-foreground" />
                         {log.real_name || log.username || `未知用户(${log.user_id})`}
                       </div>
                     </TableCell>
@@ -414,7 +473,7 @@ const OperationLogs = (): React.ReactElement => {
                                 setIsDetailsDialogOpen(true)
                               }}
                             >
-                              <Info className="h-4 w-4" />
+                              <Info className="w-4 h-4" />
                             </Button>
                           </TooltipTrigger>
                           <TooltipContent>
@@ -434,7 +493,7 @@ const OperationLogs = (): React.ReactElement => {
             <PaginationContent>
               <PaginationItem>
                 {currentPage === 1 ? (
-                  <span className="cursor-not-allowed opacity-50">
+                  <span className="opacity-50 cursor-not-allowed">
                     <PaginationPrevious className="pointer-events-none" />
                   </span>
                 ) : (
@@ -450,7 +509,7 @@ const OperationLogs = (): React.ReactElement => {
               </PaginationItem>
               <PaginationItem>
                 {currentPage === totalPages ? (
-                  <span className="cursor-not-allowed opacity-50">
+                  <span className="opacity-50 cursor-not-allowed">
                     <PaginationNext className="pointer-events-none" />
                   </span>
                 ) : (
@@ -507,7 +566,7 @@ const OperationLogs = (): React.ReactElement => {
 
               <div>
                 <p className="text-sm font-medium text-muted-foreground">详细信息</p>
-                <pre className="mt-2 rounded-md bg-muted p-4 overflow-x-auto text-sm">
+                <pre className="p-4 mt-2 overflow-x-auto text-sm rounded-md bg-muted">
                   {selectedLog.details || '无详细信息'}
                 </pre>
               </div>

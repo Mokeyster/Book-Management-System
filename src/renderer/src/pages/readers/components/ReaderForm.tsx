@@ -11,6 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@ui/popover'
 import { cn } from '~/utils'
 import { IReader, IReaderType } from '@appTypes/readerTypes'
 import { RadioGroup, RadioGroupItem } from '@ui/radio-group'
+import { useAuthStore } from '~/store/authStore'
 
 interface ReaderFormProps {
   reader: IReader | null
@@ -19,6 +20,7 @@ interface ReaderFormProps {
 }
 
 const ReaderForm = ({ reader, onClose, onSubmit }: ReaderFormProps): React.JSX.Element => {
+  const currentUser = useAuthStore((state) => state.currentUser)
   const [readerTypes, setReaderTypes] = useState<IReaderType[]>([])
   const [loading, setLoading] = useState(false)
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
@@ -110,7 +112,7 @@ const ReaderForm = ({ reader, onClose, onSubmit }: ReaderFormProps): React.JSX.E
       let result: number | boolean
       if (isNew) {
         // 添加新读者
-        result = await window.api.reader.add(submitData as IReader)
+        result = await window.api.reader.add(submitData as IReader, currentUser?.user_id)
         if (typeof result === 'number' && result > 0) {
           toast.success('读者添加成功')
           // 更新reader_id并返回完整读者对象
@@ -120,7 +122,7 @@ const ReaderForm = ({ reader, onClose, onSubmit }: ReaderFormProps): React.JSX.E
         }
       } else {
         // 更新读者
-        result = await window.api.reader.update(submitData as IReader)
+        result = await window.api.reader.update(submitData as IReader, currentUser?.user_id)
         if (result === true) {
           toast.success('读者更新成功')
           onSubmit(submitData as IReader, isNew)

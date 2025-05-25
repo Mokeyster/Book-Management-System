@@ -26,6 +26,7 @@ import { Badge } from '@ui/badge'
 import { Separator } from '@ui/separator'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@ui/tooltip'
 
+import { useAuthStore } from '~/store/authStore'
 import { IReader } from '@appTypes/readerTypes'
 import ReaderForm from './components/ReaderForm'
 
@@ -33,6 +34,7 @@ const PAGE_SIZE = 10
 
 const ReaderManagement = (): React.ReactElement => {
   const navigate = useNavigate()
+  const currentUser = useAuthStore((state) => state.currentUser)
   const [readers, setReaders] = useState<IReader[]>([])
   const [filteredReaders, setFilteredReaders] = useState<IReader[]>([])
   const [loading, setLoading] = useState(true)
@@ -98,7 +100,7 @@ const ReaderManagement = (): React.ReactElement => {
 
     setIsDeleting(true)
     try {
-      const result = await window.api.reader.delete(selectedReader.reader_id)
+      const result = await window.api.reader.delete(selectedReader.reader_id, currentUser?.user_id)
       if (result.success) {
         toast.success('读者删除成功')
         // 更新读者列表

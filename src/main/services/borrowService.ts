@@ -1,11 +1,14 @@
 import Database from 'better-sqlite3'
 import { IBorrowRecord, IBorrowRequest, IReservation } from '../../types/borrowTypes'
+import { SystemService } from './systemService'
 
 export class BorrowService {
   private db: Database.Database
+  private systemService: SystemService
 
   constructor(db: Database.Database) {
     this.db = db
+    this.systemService = new SystemService(db)
   }
 
   // 获取所有借阅记录（排除已删除图书和已删除读者）
@@ -226,10 +229,29 @@ export class BorrowService {
       // 提交事务
       this.db.prepare('COMMIT').run()
 
+      const borrowId = insertResult.lastInsertRowid as number
+
+      // 记录操作日志
+      if (borrowRequest.operator_id) {
+        const book = this.db
+          .prepare('SELECT title FROM book WHERE book_id = ?')
+          .get(borrowRequest.book_id) as { title: string } | undefined
+        const reader = this.db
+          .prepare('SELECT name FROM reader WHERE reader_id = ?')
+          .get(borrowRequest.reader_id) as { name: string } | undefined
+
+        this.systemService.logOperation(
+          borrowRequest.operator_id,
+          'borrow book',
+          '127.0.0.1',
+          `借阅图书: ${book?.title || `图书ID:${borrowRequest.book_id}`} - 读者: ${reader?.name || `读者ID:${borrowRequest.reader_id}`}`
+        )
+      }
+
       return {
         success: true,
         message: '借阅成功',
-        borrowId: insertResult.lastInsertRowid as number
+        borrowId
       }
     } catch (error) {
       this.db.prepare('ROLLBACK').run()
@@ -241,7 +263,10 @@ export class BorrowService {
   }
 
   // 归还图书
-  returnBook(borrowId: number): { success: boolean; message: string; fine?: number } {
+  returnBook(
+    borrowId: number,
+    userId?: number
+  ): { success: boolean; message: string; fine?: number } {
     try {
       // 开始事务
       this.db.prepare('BEGIN').run()
@@ -310,6 +335,23 @@ export class BorrowService {
       // 提交事务
       this.db.prepare('COMMIT').run()
 
+      // 记录操作日志
+      if (borrowRecord.operator_id) {
+        const book = this.db
+          .prepare('SELECT title FROM book WHERE book_id = ?')
+          .get(borrowRecord.book_id) as { title: string } | undefined
+        const reader = this.db
+          .prepare('SELECT name FROM reader WHERE reader_id = ?')
+          .get(borrowRecord.reader_id) as { name: string } | undefined
+
+        this.systemService.logOperation(
+          userId || borrowRecord.operator_id,
+          'return book',
+          '127.0.0.1',
+          `归还图书: ${book?.title || `图书ID:${borrowRecord.book_id}`} - 读者: ${reader?.name || `读者ID:${borrowRecord.reader_id}`}${fineAmount > 0 ? ` (罚金: ${fineAmount} 元)` : ''}`
+        )
+      }
+
       return {
         success: true,
         message: '归还成功',
@@ -325,7 +367,10 @@ export class BorrowService {
   }
 
   // 续借图书（不改变借阅状态，只更新到期日期和续借次数）
-  renewBook(borrowId: number): { success: boolean; message: string; newDueDate?: string } {
+  renewBook(
+    borrowId: number,
+    userId?: number
+  ): { success: boolean; message: string; newDueDate?: string } {
     try {
       // 开始事务
       this.db.prepare('BEGIN').run()
@@ -421,6 +466,23 @@ export class BorrowService {
 
       // 提交事务
       this.db.prepare('COMMIT').run()
+
+      // 记录操作日志
+      if (borrowRecord.operator_id) {
+        const book = this.db
+          .prepare('SELECT title FROM book WHERE book_id = ?')
+          .get(borrowRecord.book_id) as { title: string } | undefined
+        const reader = this.db
+          .prepare('SELECT name FROM reader WHERE reader_id = ?')
+          .get(borrowRecord.reader_id) as { name: string } | undefined
+
+        this.systemService.logOperation(
+          userId || borrowRecord.operator_id,
+          'renew book',
+          '127.0.0.1',
+          `续借图书: ${book?.title || `图书ID:${borrowRecord.book_id}`} - 读者: ${reader?.name || `读者ID:${borrowRecord.reader_id}`} (新到期日期: ${newDueDate})`
+        )
+      }
 
       return {
         success: true,

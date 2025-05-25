@@ -11,8 +11,8 @@ export function setupIpcHandlers(): void {
   const serviceManager = ServiceManager.getInstance()
 
   // 用户相关处理
-  ipcMain.handle('user:login', async (_event, username: string, password: string) => {
-    return serviceManager.systemService.login(username, password)
+  ipcMain.handle('user:login', async (_event, username: string, password: string, ip?: string) => {
+    return serviceManager.systemService.login(username, password, ip || '127.0.0.1')
   })
 
   // 图书相关处理
@@ -28,21 +28,24 @@ export function setupIpcHandlers(): void {
     return serviceManager.bookService.searchBooks(query)
   })
 
-  ipcMain.handle('book:add', async (_event, book: any) => {
-    return serviceManager.bookService.addBook(book)
+  ipcMain.handle('book:add', async (_event, book: any, userId?: number) => {
+    return serviceManager.bookService.addBook(book, userId)
   })
 
-  ipcMain.handle('book:update', async (_event, book: any) => {
-    return serviceManager.bookService.updateBook(book)
+  ipcMain.handle('book:update', async (_event, book: any, userId?: number) => {
+    return serviceManager.bookService.updateBook(book, userId)
   })
 
-  ipcMain.handle('book:delete', async (_event, bookId: number) => {
-    return serviceManager.bookService.deleteBook(bookId)
+  ipcMain.handle('book:delete', async (_event, bookId: number, userId?: number) => {
+    return serviceManager.bookService.deleteBook(bookId, userId)
   })
 
-  ipcMain.handle('book:updateStatus', async (_event, bookId: number, status: number) => {
-    return serviceManager.bookService.updateBookStatus(bookId, status)
-  })
+  ipcMain.handle(
+    'book:updateStatus',
+    async (_event, bookId: number, status: number, userId?: number) => {
+      return serviceManager.bookService.updateBookStatus(bookId, status, userId)
+    }
+  )
 
   ipcMain.handle('book:getTags', async (_event, bookId: number) => {
     return serviceManager.bookService.getBookTags(bookId)
@@ -57,16 +60,16 @@ export function setupIpcHandlers(): void {
     return serviceManager.bookService.getCategoryById(categoryId)
   })
 
-  ipcMain.handle('book:addCategory', async (_event, category: any) => {
-    return serviceManager.bookService.addCategory(category)
+  ipcMain.handle('book:addCategory', async (_event, category: any, userId?: number) => {
+    return serviceManager.bookService.addCategory(category, userId)
   })
 
-  ipcMain.handle('book:updateCategory', async (_event, category: any) => {
-    return serviceManager.bookService.updateCategory(category)
+  ipcMain.handle('book:updateCategory', async (_event, category: any, userId?: number) => {
+    return serviceManager.bookService.updateCategory(category, userId)
   })
 
-  ipcMain.handle('book:deleteCategory', async (_event, categoryId: number) => {
-    return serviceManager.bookService.deleteCategory(categoryId)
+  ipcMain.handle('book:deleteCategory', async (_event, categoryId: number, userId?: number) => {
+    return serviceManager.bookService.deleteCategory(categoryId, userId)
   })
 
   ipcMain.handle('book:getCategoryTree', async () => {
@@ -86,16 +89,16 @@ export function setupIpcHandlers(): void {
     return serviceManager.readerService.searchReaders(query)
   })
 
-  ipcMain.handle('reader:add', async (_event, reader: any) => {
-    return serviceManager.readerService.addReader(reader)
+  ipcMain.handle('reader:add', async (_event, reader: any, userId?: number) => {
+    return serviceManager.readerService.addReader(reader, userId)
   })
 
-  ipcMain.handle('reader:update', async (_event, reader: any) => {
-    return serviceManager.readerService.updateReader(reader)
+  ipcMain.handle('reader:update', async (_event, reader: any, userId?: number) => {
+    return serviceManager.readerService.updateReader(reader, userId)
   })
 
-  ipcMain.handle('reader:delete', async (_event, readerId: number) => {
-    return serviceManager.readerService.deleteReader(readerId)
+  ipcMain.handle('reader:delete', async (_event, readerId: number, userId?: number) => {
+    return serviceManager.readerService.deleteReader(readerId, userId)
   })
 
   ipcMain.handle('reader:getTypes', async () => {
@@ -123,16 +126,20 @@ export function setupIpcHandlers(): void {
     return serviceManager.borrowService.getBookBorrowHistory(bookId)
   })
 
-  ipcMain.handle('borrow:borrowBook', async (_event, borrowRequest: any) => {
+  ipcMain.handle('borrow:borrowBook', async (_event, borrowRequest: any, userId?: number) => {
+    // 如果传入了userId，使用userId作为operator_id
+    if (userId) {
+      borrowRequest.operator_id = userId
+    }
     return serviceManager.borrowService.borrowBook(borrowRequest)
   })
 
-  ipcMain.handle('borrow:returnBook', async (_event, borrowId: number) => {
-    return serviceManager.borrowService.returnBook(borrowId)
+  ipcMain.handle('borrow:returnBook', async (_event, borrowId: number, userId?: number) => {
+    return serviceManager.borrowService.returnBook(borrowId, userId)
   })
 
-  ipcMain.handle('borrow:renewBook', async (_event, borrowId: number) => {
-    return serviceManager.borrowService.renewBook(borrowId)
+  ipcMain.handle('borrow:renewBook', async (_event, borrowId: number, userId?: number) => {
+    return serviceManager.borrowService.renewBook(borrowId, userId)
   })
 
   ipcMain.handle('reservation:getAll', async () => {
@@ -226,6 +233,14 @@ export function setupIpcHandlers(): void {
 
   ipcMain.handle('system:getOperationLogs', async (_event, limit = 100, offset = 0) => {
     return serviceManager.systemService.getOperationLogs(limit, offset)
+  })
+
+  ipcMain.handle('system:exportOperationLogs', async (_event, filters?: any) => {
+    const result = serviceManager.systemService.exportOperationLogs(filters)
+    if (result.success && result.filePath) {
+      shell.openPath(path.dirname(result.filePath))
+    }
+    return result
   })
 
   // 统计报表相关处理

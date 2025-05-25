@@ -17,18 +17,21 @@ interface BookAPI {
   getAll: () => Promise<IBook[]>
   getById: (bookId: number) => Promise<IBook>
   search: (query: string) => Promise<IBook[]>
-  add: (book: IBook) => Promise<number>
-  update: (book: IBook) => Promise<boolean>
-  delete: (bookId: number) => Promise<{ success: boolean; message: string }>
-  updateStatus: (bookId: number, status: number) => Promise<boolean>
+  add: (book: IBook, userId?: number) => Promise<number>
+  update: (book: IBook, userId?: number) => Promise<boolean>
+  delete: (bookId: number, userId?: number) => Promise<{ success: boolean; message: string }>
+  updateStatus: (bookId: number, status: number, userId?: number) => Promise<boolean>
   getTags: (bookId: number) => Promise<ITag[]>
 
   // 图书分类相关
   getAllCategories: () => Promise<IBookCategory[]>
   getCategoryById: (categoryId: number) => Promise<IBookCategory>
-  addCategory: (category: IBookCategory) => Promise<number>
-  updateCategory: (category: IBookCategory) => Promise<boolean>
-  deleteCategory: (categoryId: number) => Promise<{ success: boolean; message: string }>
+  addCategory: (category: IBookCategory, userId?: number) => Promise<number>
+  updateCategory: (category: IBookCategory, userId?: number) => Promise<boolean>
+  deleteCategory: (
+    categoryId: number,
+    userId?: number
+  ) => Promise<{ success: boolean; message: string }>
   getCategoryTree: () => Promise<IBookCategory[]>
 }
 
@@ -36,9 +39,9 @@ interface ReaderAPI {
   getAll: () => Promise<IReader[]>
   getById: (readerId: number) => Promise<IReader>
   search: (query: string) => Promise<IReader[]>
-  add: (reader: IReader) => Promise<number>
-  update: (reader: IReader) => Promise<boolean>
-  delete: (readerId: number) => Promise<{ success: boolean; message: string }>
+  add: (reader: IReader, userId?: number) => Promise<number>
+  update: (reader: IReader, userId?: number) => Promise<boolean>
+  delete: (readerId: number, userId?: number) => Promise<{ success: boolean; message: string }>
   getTypes: () => Promise<IReaderType[]>
   getBorrowHistory: (readerId: number) => Promise<IBorrowRecord[]>
 }
@@ -48,13 +51,16 @@ interface BorrowAPI {
   getCurrent: () => Promise<IBorrowRecord[]>
   getOverdue: () => Promise<IBorrowRecord[]>
   getBookBorrowHistory: (bookId: number) => Promise<IBorrowRecord[]>
-  borrowBook: (borrowRequest: IBorrowRequest) => Promise<{
+  borrowBook: (
+    borrowRequest: IBorrowRequest,
+    userId?: number
+  ) => Promise<{
     success: boolean
     message: string
     borrowId?: number
   }>
-  returnBook: (borrowId: number) => Promise<IBorrowRecord>
-  renewBook: (borrowId: number) => Promise<IBorrowRecord>
+  returnBook: (borrowId: number, userId?: number) => Promise<IBorrowRecord>
+  renewBook: (borrowId: number, userId?: number) => Promise<IBorrowRecord>
 }
 
 interface ReservationAPI {
@@ -92,6 +98,12 @@ interface SystemAPI {
   deleteBackup: (backupId: number) => Promise<{ success: boolean; message: string }>
   restoreBackup: (backupId: number) => Promise<{ success: boolean; message: string }>
   getOperationLogs: (limit?: number, offset?: number) => Promise<IOperationLog[]>
+  exportOperationLogs: (filters?: {
+    startDate?: string
+    endDate?: string
+    userId?: number
+    operation?: string
+  }) => Promise<{ success: boolean; message: string; filePath?: string }>
 }
 
 interface StatsAPI {

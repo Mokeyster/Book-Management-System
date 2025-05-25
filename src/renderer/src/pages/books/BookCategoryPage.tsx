@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { Folder, FolderPlus, Pencil, Trash2, ChevronRight, ChevronDown } from 'lucide-react'
 import { IBookCategory } from '@appTypes/bookTypes'
+import { useAuthStore } from '~/store/authStore'
 
 import { Button } from '@ui/button'
 import { Input } from '@ui/input'
@@ -29,6 +30,7 @@ interface ICategory {
 }
 
 const BookCategoryPage = (): React.ReactElement => {
+  const currentUser = useAuthStore((state) => state.currentUser)
   const [categories, setCategories] = useState<ICategory[]>([])
   const [expandedCategories, setExpandedCategories] = useState<number[]>([])
   const [loading, setLoading] = useState(true)
@@ -155,7 +157,10 @@ const BookCategoryPage = (): React.ReactElement => {
           // 将 null 转换为 undefined 以匹配 IBookCategory 接口
           parent_id: formData.parent_id === null ? undefined : formData.parent_id
         }
-        result = await window.api.book.updateCategory(updateData as IBookCategory)
+        result = await window.api.book.updateCategory(
+          updateData as IBookCategory,
+          currentUser?.user_id
+        )
         if (result) {
           toast.success('分类更新成功')
           await loadCategories()
@@ -171,7 +176,7 @@ const BookCategoryPage = (): React.ReactElement => {
           // 确保有 category_id，因为 API 需要，这个值会被服务端替换
           category_id: 0
         }
-        result = await window.api.book.addCategory(addData as IBookCategory)
+        result = await window.api.book.addCategory(addData as IBookCategory, currentUser?.user_id)
         if (result) {
           toast.success('分类添加成功')
           await loadCategories()
@@ -195,7 +200,10 @@ const BookCategoryPage = (): React.ReactElement => {
     }
 
     try {
-      const result = await window.api.book.deleteCategory(category.category_id)
+      const result = await window.api.book.deleteCategory(
+        category.category_id,
+        currentUser?.user_id
+      )
 
       if (result.success) {
         toast.success('分类删除成功')

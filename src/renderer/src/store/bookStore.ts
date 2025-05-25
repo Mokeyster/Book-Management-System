@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { IBook } from '../../../types/bookTypes'
+import { useAuthStore } from './authStore'
 
 interface BooksState {
   books: IBook[]
@@ -47,7 +48,9 @@ export const useBookStore = create<BooksState>((set) => ({
   addBook: async (book) => {
     set({ loading: true, error: null })
     try {
-      const bookId = await window.api.book.add(book)
+      const currentUser = useAuthStore.getState().currentUser
+      const userId = currentUser?.user_id
+      const bookId = await window.api.book.add(book, userId)
       if (bookId > 0) {
         // Refresh book list after adding
         const books = await window.api.book.getAll()
@@ -64,7 +67,9 @@ export const useBookStore = create<BooksState>((set) => ({
   updateBook: async (book) => {
     set({ loading: true, error: null })
     try {
-      const success = await window.api.book.update(book)
+      const currentUser = useAuthStore.getState().currentUser
+      const userId = currentUser?.user_id
+      const success = await window.api.book.update(book, userId)
       if (success) {
         // Refresh book list after updating
         const books = await window.api.book.getAll()
@@ -81,7 +86,9 @@ export const useBookStore = create<BooksState>((set) => ({
   deleteBook: async (bookId) => {
     set({ loading: true, error: null })
     try {
-      const result = await window.api.book.delete(bookId)
+      const currentUser = useAuthStore.getState().currentUser
+      const userId = currentUser?.user_id
+      const result = await window.api.book.delete(bookId, userId)
       if (result.success) {
         // Remove book from store after deleting
         set((state) => ({
@@ -104,7 +111,9 @@ export const useBookStore = create<BooksState>((set) => ({
   updateBookStatus: async (bookId, status) => {
     set({ loading: true, error: null })
     try {
-      const success = await window.api.book.updateStatus(bookId, status)
+      const currentUser = useAuthStore.getState().currentUser
+      const userId = currentUser?.user_id
+      const success = await window.api.book.updateStatus(bookId, status, userId)
       if (success) {
         // Update the book status in the store
         set((state) => ({

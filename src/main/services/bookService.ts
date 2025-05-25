@@ -1,11 +1,14 @@
 import Database from 'better-sqlite3'
 import { IBook } from '../../types/bookTypes'
+import { SystemService } from './systemService'
 
 export class BookService {
   private db: Database.Database
+  private systemService: SystemService
 
   constructor(db: Database.Database) {
     this.db = db
+    this.systemService = new SystemService(db)
   }
 
   // 获取所有图书
@@ -54,7 +57,7 @@ export class BookService {
   }
 
   // 添加新图书
-  addBook(book: Omit<IBook, 'book_id'>): number {
+  addBook(book: Omit<IBook, 'book_id'>, userId?: number): number {
     const stmt = this.db.prepare(`
       INSERT INTO book (
         isbn, title, author, publisher_id, publish_date,
@@ -75,11 +78,23 @@ export class BookService {
       book.status || 1
     )
 
-    return result.lastInsertRowid as number
+    const bookId = result.lastInsertRowid as number
+
+    // 记录操作日志
+    if (userId) {
+      this.systemService.logOperation(
+        userId,
+        'add book',
+        '127.0.0.1',
+        `添加图书: ${book.title} (ISBN: ${book.isbn})`
+      )
+    }
+
+    return bookId
   }
 
   // 更新图书信息
-  updateBook(book: IBook): boolean {
+  updateBook(book: IBook, userId?: number): boolean {
     const stmt = this.db.prepare(`
       UPDATE book SET
         isbn = ?, title = ?, author = ?, publisher_id = ?,
@@ -103,11 +118,23 @@ export class BookService {
       book.book_id
     )
 
-    return result.changes > 0
+    const success = result.changes > 0
+
+    // 记录操作日志
+    if (success && userId) {
+      this.systemService.logOperation(
+        userId,
+        'update book',
+        '127.0.0.1',
+        `更新图书: ${book.title} (ID: ${book.book_id})`
+      )
+    }
+
+    return success
   }
 
   // 软删除图书（将状态设置为"已删除"）
-  deleteBook(bookId: number): { success: boolean; message: string } {
+  deleteBook(bookId: number, userId?: number): { success: boolean; message: string } {
     try {
       // 检查是否有未归还的借阅记录
       const activeBorrows = this.db
@@ -120,6 +147,9 @@ export class BookService {
         return { success: false, message: '该图书有未归还的借阅记录，不能删除' }
       }
 
+      // 获取图书信息用于日志
+      const book = this.getBookById(bookId)
+
       // 将图书状态更新为"已删除"(假设用6表示已删除状态)
       const stmt = this.db.prepare(`
         UPDATE book SET
@@ -129,9 +159,21 @@ export class BookService {
       `)
 
       const result = stmt.run(bookId)
+      const success = result.changes > 0
+
+      // 记录操作日志
+      if (success && userId && book) {
+        this.systemService.logOperation(
+          userId,
+          'delete book',
+          '127.0.0.1',
+          `删除图书: ${book.title} (ID: ${bookId})`
+        )
+      }
+
       return {
-        success: result.changes > 0,
-        message: result.changes > 0 ? '删除成功' : '图书不存在'
+        success,
+        message: success ? '删除成功' : '图书不存在'
       }
     } catch (error) {
       console.error('删除图书失败:', error)
@@ -185,7 +227,7 @@ export class BookService {
   }
 
   // 更新图书状态
-  updateBookStatus(bookId: number, status: number): boolean {
+  updateBookStatus(bookId: number, status: number, userId?: number): boolean {
     const stmt = this.db.prepare(`
       UPDATE book SET
         status = ?,
@@ -194,7 +236,34 @@ export class BookService {
     `)
 
     const result = stmt.run(status, bookId)
-    return result.changes > 0
+    const success = result.changes > 0
+
+    // 记录操作日志
+    if (success && userId) {
+      const book = this.getBookById(bookId)
+      const statusText = this.getStatusText(status)
+      this.systemService.logOperation(
+        userId,
+        'update book status',
+        '127.0.0.1',
+        `更新图书状态: ${book?.title || `ID:${bookId}`} -> ${statusText}`
+      )
+    }
+
+    return success
+  }
+
+  // 获取状态文本
+  private getStatusText(status: number): string {
+    const statusMap = {
+      1: '在架',
+      2: '借出',
+      3: '预约',
+      4: '维修',
+      5: '丢失',
+      6: '已删除'
+    }
+    return statusMap[status] || '未知状态'
   }
 
   // 获取图书的标签
@@ -262,7 +331,7 @@ export class BookService {
       .get(categoryId)
   }
 
-  addCategory(category: any): number {
+  addCategory(category: any, userId?: number): number {
     const stmt = this.db.prepare(`
       INSERT INTO book_category (category_name, category_code, parent_id, level, description)
       VALUES (?, ?, ?, ?, ?)
@@ -277,12 +346,24 @@ export class BookService {
     )
 
     if (result.lastInsertRowid) {
-      return Number(result.lastInsertRowid)
+      const categoryId = Number(result.lastInsertRowid)
+
+      // 记录操作日志
+      if (userId) {
+        this.systemService.logOperation(
+          userId,
+          'add category',
+          '127.0.0.1',
+          `添加分类: ${category.category_name}`
+        )
+      }
+
+      return categoryId
     }
     return 0
   }
 
-  updateCategory(category: any): boolean {
+  updateCategory(category: any, userId?: number): boolean {
     const stmt = this.db.prepare(`
       UPDATE book_category
       SET category_name = ?, category_code = ?, parent_id = ?,
@@ -299,10 +380,22 @@ export class BookService {
       category.category_id
     )
 
-    return result.changes > 0
+    const success = result.changes > 0
+
+    // 记录操作日志
+    if (success && userId) {
+      this.systemService.logOperation(
+        userId,
+        'update category',
+        '127.0.0.1',
+        `更新分类: ${category.category_name} (ID: ${category.category_id})`
+      )
+    }
+
+    return success
   }
 
-  deleteCategory(categoryId: number): { success: boolean; message: string } {
+  deleteCategory(categoryId: number, userId?: number): { success: boolean; message: string } {
     // 检查是否有图书使用此分类
     const booksWithCategory = this.db
       .prepare('SELECT COUNT(*) as count FROM book WHERE category_id = ?')
@@ -321,11 +414,25 @@ export class BookService {
       return { success: false, message: '此分类下有子分类，不能删除' }
     }
 
+    // 获取分类信息用于日志
+    const category = this.getCategoryById(categoryId)
+
     // 执行删除
     const stmt = this.db.prepare('DELETE FROM book_category WHERE category_id = ?')
     const result = stmt.run(categoryId)
+    const success = result.changes > 0
 
-    return { success: result.changes > 0, message: '' }
+    // 记录操作日志
+    if (success && userId && category) {
+      this.systemService.logOperation(
+        userId,
+        'delete category',
+        '127.0.0.1',
+        `删除分类: ${category.category_name} (ID: ${categoryId})`
+      )
+    }
+
+    return { success, message: '' }
   }
 
   // 获取分类树形结构

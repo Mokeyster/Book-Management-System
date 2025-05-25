@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { IBorrowRecord, IBorrowRequest, IReservation } from '../../../types/borrowTypes'
+import { useAuthStore } from './authStore'
 
 interface BorrowingState {
   borrowRecords: IBorrowRecord[]
@@ -69,7 +70,9 @@ export const useBorrowingStore = create<BorrowingState>((set, get) => ({
   borrowBook: async (request) => {
     set({ loading: true, error: null })
     try {
-      const result = await window.api.borrow.borrowBook(request)
+      const currentUser = useAuthStore.getState().currentUser
+      const userId = currentUser?.user_id
+      const result = await window.api.borrow.borrowBook(request, userId)
       // Refresh current borrow list
       await get().fetchCurrentBorrows()
       set({ loading: false })
@@ -84,7 +87,9 @@ export const useBorrowingStore = create<BorrowingState>((set, get) => ({
   returnBook: async (borrowId) => {
     set({ loading: true, error: null })
     try {
-      const result = await window.api.borrow.returnBook(borrowId)
+      const currentUser = useAuthStore.getState().currentUser
+      const userId = currentUser?.user_id
+      const result = await window.api.borrow.returnBook(borrowId, userId)
       // Refresh current borrow list and all borrow list
       await Promise.all([get().fetchCurrentBorrows(), get().fetchAllBorrows()])
       set({ loading: false })
@@ -99,7 +104,9 @@ export const useBorrowingStore = create<BorrowingState>((set, get) => ({
   renewBook: async (borrowId) => {
     set({ loading: true, error: null })
     try {
-      const result = await window.api.borrow.renewBook(borrowId)
+      const currentUser = useAuthStore.getState().currentUser
+      const userId = currentUser?.user_id
+      const result = await window.api.borrow.renewBook(borrowId, userId)
       // Refresh current borrow list
       await get().fetchCurrentBorrows()
       set({ loading: false })

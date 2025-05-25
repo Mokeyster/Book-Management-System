@@ -13,6 +13,7 @@ import { cn } from '~/utils'
 import { IBook } from '@appTypes/bookTypes'
 import { IBookCategory } from '@appTypes/bookTypes'
 import { IPublisher } from '@appTypes/publisherTypes'
+import { useAuthStore } from '~/store/authStore'
 
 interface BookFormProps {
   book: IBook | null
@@ -21,6 +22,7 @@ interface BookFormProps {
 }
 
 const BookForm = ({ book, onClose, onSubmit }: BookFormProps): React.JSX.Element => {
+  const currentUser = useAuthStore((state) => state.currentUser)
   const [publishers, setPublishers] = useState<IPublisher[]>([])
   const [categories, setCategories] = useState<IBookCategory[]>([])
   const [loading, setLoading] = useState(false)
@@ -114,7 +116,7 @@ const BookForm = ({ book, onClose, onSubmit }: BookFormProps): React.JSX.Element
       let result: number | boolean
       if (isNew) {
         // 添加新图书
-        result = await window.api.book.add(submitData as IBook)
+        result = await window.api.book.add(submitData as IBook, currentUser?.user_id)
         if (typeof result === 'number' && result > 0) {
           toast.success('图书添加成功')
           // 更新book_id并返回完整图书对象
@@ -124,7 +126,7 @@ const BookForm = ({ book, onClose, onSubmit }: BookFormProps): React.JSX.Element
         }
       } else {
         // 更新图书
-        result = await window.api.book.update(submitData as IBook)
+        result = await window.api.book.update(submitData as IBook, currentUser?.user_id)
         if (result === true) {
           toast.success('图书更新成功')
           onSubmit(submitData as IBook, isNew)

@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { IReader } from '../../../types/readerTypes'
 import { IBorrowRecord } from '../../../types/borrowTypes'
+import { useAuthStore } from './authStore'
 
 interface ReadersState {
   readers: IReader[]
@@ -50,7 +51,9 @@ export const useReaderStore = create<ReadersState>((set) => ({
   addReader: async (reader) => {
     set({ loading: true, error: null })
     try {
-      const readerId = await window.api.reader.add(reader)
+      const currentUser = useAuthStore.getState().currentUser
+      const userId = currentUser?.user_id
+      const readerId = await window.api.reader.add(reader, userId)
       if (readerId > 0) {
         // Refresh reader list after adding
         const readers = await window.api.reader.getAll()
@@ -67,7 +70,9 @@ export const useReaderStore = create<ReadersState>((set) => ({
   updateReader: async (reader) => {
     set({ loading: true, error: null })
     try {
-      const success = await window.api.reader.update(reader)
+      const currentUser = useAuthStore.getState().currentUser
+      const userId = currentUser?.user_id
+      const success = await window.api.reader.update(reader, userId)
       if (success) {
         // Refresh reader list after updating
         const readers = await window.api.reader.getAll()
@@ -84,7 +89,9 @@ export const useReaderStore = create<ReadersState>((set) => ({
   deleteReader: async (readerId) => {
     set({ loading: true, error: null })
     try {
-      const result = await window.api.reader.delete(readerId)
+      const currentUser = useAuthStore.getState().currentUser
+      const userId = currentUser?.user_id
+      const result = await window.api.reader.delete(readerId, userId)
       if (result.success) {
         // Remove reader from store after deleting
         set((state) => ({

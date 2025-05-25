@@ -1,11 +1,14 @@
 import Database from 'better-sqlite3'
 import { IReader, IReaderType } from '../../types/readerTypes'
+import { SystemService } from './systemService'
 
 export class ReaderService {
   private db: Database.Database
+  private systemService: SystemService
 
   constructor(db: Database.Database) {
     this.db = db
+    this.systemService = new SystemService(db)
   }
 
   // 获取所有读者（排除已删除的读者）
@@ -52,7 +55,7 @@ export class ReaderService {
   }
 
   // 添加新读者
-  addReader(reader: Omit<IReader, 'reader_id'>): number {
+  addReader(reader: Omit<IReader, 'reader_id'>, userId?: number): number {
     const stmt = this.db.prepare(`
       INSERT INTO reader (
         name, gender, id_card, phone, email,
@@ -72,11 +75,23 @@ export class ReaderService {
       reader.type_id
     )
 
-    return result.lastInsertRowid as number
+    const readerId = result.lastInsertRowid as number
+
+    // 记录操作日志
+    if (userId) {
+      this.systemService.logOperation(
+        userId,
+        'add reader',
+        '127.0.0.1',
+        `添加读者: ${reader.name} (身份证: ${reader.id_card})`
+      )
+    }
+
+    return readerId
   }
 
   // 更新读者信息
-  updateReader(reader: IReader): boolean {
+  updateReader(reader: IReader, userId?: number): boolean {
     const stmt = this.db.prepare(`
       UPDATE reader SET
         name = ?, gender = ?, id_card = ?, phone = ?,
@@ -98,11 +113,23 @@ export class ReaderService {
       reader.reader_id
     )
 
-    return result.changes > 0
+    const success = result.changes > 0
+
+    // 记录操作日志
+    if (success && userId) {
+      this.systemService.logOperation(
+        userId,
+        'update reader',
+        '127.0.0.1',
+        `更新读者: ${reader.name} (ID: ${reader.reader_id})`
+      )
+    }
+
+    return success
   }
 
   // 软删除读者（将状态设置为"已注销"）
-  deleteReader(readerId: number): { success: boolean; message: string } {
+  deleteReader(readerId: number, userId?: number): { success: boolean; message: string } {
     try {
       // 开始事务
       this.db.exec('BEGIN TRANSACTION')
@@ -121,6 +148,9 @@ export class ReaderService {
         return { success: false, message: '该读者有未归还的借阅记录，无法删除' }
       }
 
+      // 获取读者信息用于日志
+      const reader = this.getReaderById(readerId)
+
       // 更新读者状态为"已注销"（状态3）
       const stmt = this.db.prepare('UPDATE reader SET status = 3 WHERE reader_id = ?')
       const result = stmt.run(readerId)
@@ -128,9 +158,21 @@ export class ReaderService {
       // 提交事务
       this.db.exec('COMMIT')
 
+      const success = result.changes > 0
+
+      // 记录操作日志
+      if (success && userId && reader) {
+        this.systemService.logOperation(
+          userId,
+          'delete reader',
+          '127.0.0.1',
+          `删除读者: ${reader.name} (ID: ${readerId})`
+        )
+      }
+
       return {
-        success: result.changes > 0,
-        message: result.changes > 0 ? '读者已成功注销' : '读者不存在或已被注销'
+        success,
+        message: success ? '读者已成功注销' : '读者不存在或已被注销'
       }
     } catch (error) {
       // 回滚事务

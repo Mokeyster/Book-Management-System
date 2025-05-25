@@ -13,13 +13,19 @@ export class SystemService {
   }
 
   // 用户登录验证
-  login(username: string, password: string): { success: boolean; message: string; user?: any } {
+  login(
+    username: string,
+    password: string,
+    ip: string = '127.0.0.1'
+  ): { success: boolean; message: string; user?: any } {
     // 获取用户信息
     const user = this.db.prepare('SELECT * FROM system_user WHERE username = ?').get(username) as
       | ISystemUser
       | undefined
 
     if (!user) {
+      // 记录登录失败日志
+      this.logOperation(0, 'login failed', ip, `登录失败: ${username} - 用户不存在`)
       return { success: false, message: '用户不存在' }
     }
 
@@ -27,10 +33,19 @@ export class SystemService {
     const passwordHash = crypto.createHash('sha256').update(password).digest('hex')
 
     if (user.password_hash !== passwordHash) {
+      // 记录登录失败日志
+      this.logOperation(user.user_id, 'login failed', ip, `登录失败: ${username} - 密码错误`)
       return { success: false, message: '密码错误' }
     }
 
     if (user.status !== 1) {
+      // 记录登录失败日志
+      this.logOperation(
+        user.user_id,
+        'login failed',
+        ip,
+        `登录失败: ${username} - 账号被禁用 (状态: ${user.status})`
+      )
       return { success: false, message: '账号已被锁定或禁用' }
     }
 
@@ -38,6 +53,14 @@ export class SystemService {
     this.db
       .prepare("UPDATE system_user SET last_login = datetime('now', 'localtime') WHERE user_id = ?")
       .run(user.user_id)
+
+    // 记录登录成功日志
+    this.logOperation(
+      user.user_id,
+      'login successful',
+      ip,
+      `登录成功: ${username} (用户ID: ${user.user_id}, 真实姓名: ${user.real_name})`
+    )
 
     // 获取角色信息
     const role = this.getRoleById(user.role_id)
@@ -429,5 +452,93 @@ export class SystemService {
     `
       )
       .all(userId, limit, offset)
+  }
+
+  // 导出操作日志
+  exportOperationLogs(filters?: {
+    startDate?: string
+    endDate?: string
+    userId?: number
+    operation?: string
+  }): { success: boolean; message: string; filePath?: string } {
+    try {
+      // 构建查询条件
+      let whereClause = '1=1'
+      const params: any[] = []
+
+      if (filters?.startDate) {
+        whereClause += ' AND l.operation_time >= ?'
+        params.push(filters.startDate)
+      }
+
+      if (filters?.endDate) {
+        whereClause += ' AND l.operation_time <= ?'
+        params.push(filters.endDate + ' 23:59:59')
+      }
+
+      if (filters?.userId) {
+        whereClause += ' AND l.user_id = ?'
+        params.push(filters.userId)
+      }
+
+      if (filters?.operation) {
+        whereClause += ' AND l.operation LIKE ?'
+        params.push(`%${filters.operation}%`)
+      }
+
+      // 获取数据
+      const logs = this.db
+        .prepare(
+          `
+        SELECT l.log_id, l.operation_time, u.username, u.real_name,
+               l.operation, l.ip, l.details
+        FROM operation_log l
+        LEFT JOIN system_user u ON l.user_id = u.user_id
+        WHERE ${whereClause}
+        ORDER BY l.operation_time DESC
+      `
+        )
+        .all(...params)
+
+      // 生成CSV内容
+      const headers = ['日志ID', '操作时间', '用户名', '真实姓名', '操作类型', 'IP地址', '操作详情']
+      const csvContent = [
+        headers.join(','),
+        ...logs.map((log: any) =>
+          [
+            log.log_id,
+            log.operation_time,
+            log.username || '',
+            log.real_name || '',
+            `"${log.operation}"`,
+            log.ip,
+            `"${(log.details || '').replace(/"/g, '""')}"`
+          ].join(',')
+        )
+      ].join('\n')
+
+      // 添加BOM以支持中文
+      const csvWithBOM = '\uFEFF' + csvContent
+
+      // 创建导出文件
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+      const fileName = `操作日志_${timestamp}.csv`
+      const downloadsPath = app.getPath('downloads')
+      const filePath = path.join(downloadsPath, fileName)
+
+      fs.writeFileSync(filePath, csvWithBOM, 'utf8')
+
+      return {
+        success: true,
+        message: '操作日志导出成功',
+        filePath
+      }
+    } catch (error) {
+      console.error('导出操作日志失败:', error)
+      return {
+        success: false,
+        message: '导出操作日志失败: ' + (error as Error).message
+      }
+    }
   }
 }

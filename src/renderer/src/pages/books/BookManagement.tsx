@@ -26,6 +26,7 @@ import { Badge } from '@ui/badge'
 import { Separator } from '@ui/separator'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@ui/tooltip'
 
+import { useAuthStore } from '~/store/authStore'
 import { IBook } from '@appTypes/bookTypes'
 import BookForm from './components/BookForm'
 
@@ -33,6 +34,7 @@ const PAGE_SIZE = 10
 
 const BookManagement = (): React.ReactElement => {
   const navigate = useNavigate()
+  const currentUser = useAuthStore((state) => state.currentUser)
   const [books, setBooks] = useState<IBook[]>([])
   const [filteredBooks, setFilteredBooks] = useState<IBook[]>([])
   const [loading, setLoading] = useState(true)
@@ -98,7 +100,7 @@ const BookManagement = (): React.ReactElement => {
 
     setIsDeleting(true)
     try {
-      const result = await window.api.book.delete(selectedBook.book_id)
+      const result = await window.api.book.delete(selectedBook.book_id, currentUser?.user_id)
       if (result.success) {
         toast.success('图书删除成功')
         // 更新图书列表
