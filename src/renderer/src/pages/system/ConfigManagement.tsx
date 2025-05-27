@@ -8,7 +8,6 @@ import { Input } from '@ui/input'
 import { Separator } from '@ui/separator'
 import { Textarea } from '@ui/textarea'
 import { Switch } from '@ui/switch'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@ui/tabs'
 
 import { ISystemConfig } from '~/types/system'
 
@@ -122,17 +121,6 @@ const ConfigManagement = (): React.ReactElement => {
   const [configs, setConfigs] = useState<ISystemConfig[]>([])
   const [loading, setLoading] = useState(true)
 
-  // 分类配置
-  const borrowConfigs = configs.filter((c) => c.config_key.startsWith('borrow_'))
-  const systemConfigs = configs.filter((c) => c.config_key.startsWith('system_'))
-  const notificationConfigs = configs.filter((c) => c.config_key.startsWith('notification_'))
-  const otherConfigs = configs.filter(
-    (c) =>
-      !c.config_key.startsWith('borrow_') &&
-      !c.config_key.startsWith('system_') &&
-      !c.config_key.startsWith('notification_')
-  )
-
   // 加载系统配置
   useEffect(() => {
     const loadConfigs = async (): Promise<void> => {
@@ -192,59 +180,15 @@ const ConfigManagement = (): React.ReactElement => {
       </div>
 
       <Separator />
-
-      <Tabs defaultValue="borrow" className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="borrow">借阅设置</TabsTrigger>
-          <TabsTrigger value="system">系统设置</TabsTrigger>
-          <TabsTrigger value="notification">通知设置</TabsTrigger>
-          <TabsTrigger value="other">其他设置</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="borrow" className="mt-6">
-          <h2 className="mb-4 text-xl font-semibold">借阅相关设置</h2>
-          {borrowConfigs.length > 0 ? (
-            borrowConfigs.map((config) => (
-              <ConfigItem key={config.config_id} config={config} onSave={handleSaveConfig} />
-            ))
-          ) : (
-            <p className="text-muted-foreground">暂无借阅相关配置</p>
-          )}
-        </TabsContent>
-
-        <TabsContent value="system" className="mt-6">
-          <h2 className="mb-4 text-xl font-semibold">系统核心设置</h2>
-          {systemConfigs.length > 0 ? (
-            systemConfigs.map((config) => (
-              <ConfigItem key={config.config_id} config={config} onSave={handleSaveConfig} />
-            ))
-          ) : (
-            <p className="text-muted-foreground">暂无系统核心配置</p>
-          )}
-        </TabsContent>
-
-        <TabsContent value="notification" className="mt-6">
-          <h2 className="mb-4 text-xl font-semibold">通知提醒设置</h2>
-          {notificationConfigs.length > 0 ? (
-            notificationConfigs.map((config) => (
-              <ConfigItem key={config.config_id} config={config} onSave={handleSaveConfig} />
-            ))
-          ) : (
-            <p className="text-muted-foreground">暂无通知提醒配置</p>
-          )}
-        </TabsContent>
-
-        <TabsContent value="other" className="mt-6">
-          <h2 className="mb-4 text-xl font-semibold">其他设置</h2>
-          {otherConfigs.length > 0 ? (
-            otherConfigs.map((config) => (
-              <ConfigItem key={config.config_id} config={config} onSave={handleSaveConfig} />
-            ))
-          ) : (
-            <p className="text-muted-foreground">暂无其他配置</p>
-          )}
-        </TabsContent>
-      </Tabs>
+      <div>
+        {configs.length > 0 ? (
+          configs.map((config) => (
+            <ConfigItem key={config.config_id} config={config} onSave={handleSaveConfig} />
+          ))
+        ) : (
+          <p className="text-muted-foreground">暂无其他配置</p>
+        )}
+      </div>
     </div>
   )
 }
