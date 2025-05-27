@@ -154,7 +154,7 @@ const BookManagement = (): React.ReactElement => {
             placeholder="搜索图书 (书名, 作者, ISBN, 出版社)"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="max-w-md pl-8"
+            className="max-w-md pl-8 w-[300px]"
           />
         </div>
         {searchQuery && (

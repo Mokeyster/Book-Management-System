@@ -1,4 +1,4 @@
-import { Bell, ChevronDown, LogOut, Moon, Settings, Sun, User } from 'lucide-react'
+import { ChevronDown, LogOut, Moon, Settings, Sun, User } from 'lucide-react'
 import { useTheme } from '~/hooks/useTheme'
 import { Button } from '@ui/button'
 import {
@@ -28,10 +28,6 @@ const Header = (): React.JSX.Element => {
       <div className="flex items-center"></div>
 
       <div className="flex items-center space-x-3">
-        <Button variant="ghost" size="icon" className="text-muted-foreground">
-          <Bell className="w-5 h-5" />
-        </Button>
-
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="text-muted-foreground">

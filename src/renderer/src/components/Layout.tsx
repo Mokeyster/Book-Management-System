@@ -11,8 +11,10 @@ const Layout = (): React.JSX.Element => {
       <Sidebar />
       <div className="flex flex-col flex-1">
         <Header />
-        <ScrollArea className="flex-1 h-full p-4 md:p-6">
-          <Outlet />
+        <ScrollArea className="flex-1 h-full">
+          <div className="p-6">
+            <Outlet />
+          </div>
         </ScrollArea>
       </div>
       <Toaster position="top-right" />
