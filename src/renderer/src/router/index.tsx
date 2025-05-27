@@ -22,6 +22,7 @@ const ConfigManagement = lazy(() => import('~/pages/system/ConfigManagement'))
 const DataBackup = lazy(() => import('~/pages/system/DataBackup'))
 const OperationLogs = lazy(() => import('~/pages/system/OperationLogs'))
 const ReportCenter = lazy(() => import('~/pages/reports/ReportCenter'))
+const ProfilePage = lazy(() => import('~/pages/profile/ProfilePage'))
 
 // 路由鉴权组件
 import AuthRoute from './AuthRoute'
@@ -156,6 +157,14 @@ export const router = createHashRouter([
         element: (
           <Suspense fallback={<Loading />}>
             <ReportCenter />
+          </Suspense>
+        )
+      },
+      {
+        path: 'profile',
+        element: (
+          <Suspense fallback={<Loading />}>
+            <ProfilePage />
           </Suspense>
         )
       }
