@@ -37,9 +37,9 @@ function createWindow(): void {
   }
 
   // 开发模式下自动打开开发者工具
-  if (is.dev) {
-    mainWindow.webContents.openDevTools()
-  }
+  // if (is.dev) {
+  //   mainWindow.webContents.openDevTools()
+  // }
 }
 
 // This method will be called when Electron has finished
