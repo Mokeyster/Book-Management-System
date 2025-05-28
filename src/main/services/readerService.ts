@@ -1,5 +1,6 @@
 import Database from 'better-sqlite3'
 import { IReader, IReaderType } from '../../types/readerTypes'
+import { IBorrowRecord } from '../../types/borrowTypes'
 import { SystemService } from './systemService'
 
 /**
@@ -442,18 +443,18 @@ export class ReaderService {
    * @param readerId 读者ID
    * @returns 借阅记录数组
    */
-  getReaderBorrowHistory(readerId: number): any[] {
+  getReaderBorrowHistory(readerId: number): IBorrowRecord[] {
     return this.db
       .prepare(
         `
-      SELECT br.*, b.title, b.isbn, b.author
+      SELECT br.*, b.title as book_title, b.isbn, b.author
       FROM borrow_record br
       JOIN book b ON br.book_id = b.book_id
       WHERE br.reader_id = ? AND b.status != 6  -- 排除已删除图书
       ORDER BY br.borrow_date DESC
     `
       )
-      .all(readerId)
+      .all(readerId) as IBorrowRecord[]
   }
 
   /**
