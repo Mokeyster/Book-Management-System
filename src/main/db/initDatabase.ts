@@ -4,285 +4,314 @@ import path from 'path'
 import fs from 'fs'
 
 // 数据库文件路径
+// 使用Electron的app.getPath获取用户数据目录，确保数据库文件存储在适当位置
 const dbPath = path.join(app.getPath('userData'), 'library.db')
 
-// 初始化数据库
+// 初始化数据库函数
+// 该函数负责创建数据库连接、创建表结构并初始化基础数据
 export function initDatabase(): Database.Database {
   // 确保数据库目录存在
+  // 使用recursive:true确保即使父目录不存在也能创建完整路径
   const dbDir = path.dirname(dbPath)
   if (!fs.existsSync(dbDir)) {
     fs.mkdirSync(dbDir, { recursive: true })
   }
 
   // 创建或打开数据库连接
+  // better-sqlite3提供了同步API，简化了数据库操作
   const db = new Database(dbPath)
 
   // 启用外键约束
+  // 这确保了引用完整性，防止删除被引用的记录
   db.pragma('foreign_keys = ON')
 
   // 创建表结构
+  // 调用下方定义的函数创建所有必要的表
   createTables(db)
 
   // 初始化基础数据
+  // 调用下方定义的函数填充基础数据
   initBaseData(db)
 
+  // 返回初始化后的数据库连接
   return db
 }
 
-// 创建表结构
+// 创建表结构函数
+// 该函数定义了系统所需的所有表结构
 function createTables(db: Database.Database): void {
   // 图书分类表
+  // 支持多级分类结构，通过parent_id实现层级关系
   db.exec(`
     CREATE TABLE IF NOT EXISTS book_category (
-      category_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      category_name TEXT NOT NULL,
-      category_code TEXT,
-      parent_id INTEGER,
-      level INTEGER DEFAULT 1,
-      description TEXT,
-      FOREIGN KEY (parent_id) REFERENCES book_category (category_id)
+      category_id INTEGER PRIMARY KEY AUTOINCREMENT, -- 分类ID，自增主键
+      category_name TEXT NOT NULL,                   -- 分类名称，必填
+      category_code TEXT,                            -- 分类代码，可选
+      parent_id INTEGER,                             -- 父分类ID，实现层级结构
+      level INTEGER DEFAULT 1,                       -- 层级深度，默认为1级
+      description TEXT,                              -- 分类描述
+      FOREIGN KEY (parent_id) REFERENCES book_category (category_id) -- 外键约束确保父分类存在
     )
   `)
 
   // 出版社表
+  // 存储图书出版社相关信息
   db.exec(`
     CREATE TABLE IF NOT EXISTS publisher (
-      publisher_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      address TEXT,
-      contact_person TEXT,
-      phone TEXT,
-      email TEXT,
-      website TEXT,
-      description TEXT,
-      cooperation_history TEXT
+      publisher_id INTEGER PRIMARY KEY AUTOINCREMENT, -- 出版社ID，自增主键
+      name TEXT NOT NULL,                             -- 出版社名称，必填
+      address TEXT,                                   -- 地址
+      contact_person TEXT,                            -- 联系人
+      phone TEXT,                                     -- 电话
+      email TEXT,                                     -- 电子邮件
+      website TEXT,                                   -- 网站
+      description TEXT,                               -- 描述
+      cooperation_history TEXT                        -- 合作历史记录
     )
   `)
 
   // 图书表
+  // 系统核心表，存储图书基本信息
   db.exec(`
     CREATE TABLE IF NOT EXISTS book (
-      book_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      isbn TEXT UNIQUE,
-      title TEXT NOT NULL,
-      author TEXT,
-      publisher_id INTEGER,
-      publish_date TEXT,
-      price REAL,
-      category_id INTEGER,
-      location TEXT,
-      description TEXT,
-      status INTEGER DEFAULT 1, -- 1:在库, 2:借出, 3:预约, 4:损坏, 5:丢失
-      create_time TEXT DEFAULT (datetime('now', 'localtime')),
-      update_time TEXT DEFAULT (datetime('now', 'localtime')),
-      FOREIGN KEY (publisher_id) REFERENCES publisher (publisher_id),
-      FOREIGN KEY (category_id) REFERENCES book_category (category_id)
+      book_id INTEGER PRIMARY KEY AUTOINCREMENT,      -- 图书ID，自增主键
+      isbn TEXT UNIQUE,                               -- ISBN编号，唯一
+      title TEXT NOT NULL,                            -- 图书标题，必填
+      author TEXT,                                    -- 作者
+      publisher_id INTEGER,                           -- 出版社ID，外键
+      publish_date TEXT,                              -- 出版日期
+      price REAL,                                     -- 价格
+      category_id INTEGER,                            -- 分类ID，外键
+      location TEXT,                                  -- 馆藏位置
+      description TEXT,                               -- 图书描述
+      status INTEGER DEFAULT 1,                       -- 状态：1:在库, 2:借出, 3:预约, 4:损坏, 5:丢失
+      create_time TEXT DEFAULT (datetime('now', 'localtime')), -- 创建时间，自动设置为当前本地时间
+      update_time TEXT DEFAULT (datetime('now', 'localtime')), -- 更新时间，自动设置为当前本地时间
+      FOREIGN KEY (publisher_id) REFERENCES publisher (publisher_id), -- 出版社外键约束
+      FOREIGN KEY (category_id) REFERENCES book_category (category_id) -- 分类外键约束
     )
   `)
 
   // 标签表
+  // 用于图书分类的补充，提供更灵活的图书标记
   db.exec(`
     CREATE TABLE IF NOT EXISTS tag (
-      tag_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      tag_name TEXT NOT NULL UNIQUE,
-      description TEXT
+      tag_id INTEGER PRIMARY KEY AUTOINCREMENT, -- 标签ID，自增主键
+      tag_name TEXT NOT NULL UNIQUE,            -- 标签名称，唯一
+      description TEXT                          -- 标签描述
     )
   `)
 
   // 图书-标签关系表
+  // 多对多关系表，一本书可有多个标签，一个标签可关联多本书
   db.exec(`
     CREATE TABLE IF NOT EXISTS book_tag (
-      book_id INTEGER,
-      tag_id INTEGER,
-      PRIMARY KEY (book_id, tag_id),
-      FOREIGN KEY (book_id) REFERENCES book (book_id),
-      FOREIGN KEY (tag_id) REFERENCES tag (tag_id)
+      book_id INTEGER,                          -- 图书ID
+      tag_id INTEGER,                           -- 标签ID
+      PRIMARY KEY (book_id, tag_id),            -- 复合主键，确保关系唯一
+      FOREIGN KEY (book_id) REFERENCES book (book_id), -- 图书外键约束
+      FOREIGN KEY (tag_id) REFERENCES tag (tag_id)     -- 标签外键约束
     )
   `)
 
   // 入库记录表
+  // 跟踪图书入库情况
   db.exec(`
     CREATE TABLE IF NOT EXISTS inventory_in (
-      in_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      book_id INTEGER,
-      in_date TEXT DEFAULT (datetime('now', 'localtime')),
-      quantity INTEGER DEFAULT 1,
-      source TEXT,
-      operator_id INTEGER,
-      remark TEXT,
-      FOREIGN KEY (book_id) REFERENCES book (book_id),
-      FOREIGN KEY (operator_id) REFERENCES system_user (user_id)
+      in_id INTEGER PRIMARY KEY AUTOINCREMENT,  -- 入库记录ID，自增主键
+      book_id INTEGER,                          -- 图书ID，外键
+      in_date TEXT DEFAULT (datetime('now', 'localtime')), -- 入库日期，默认为当前时间
+      quantity INTEGER DEFAULT 1,               -- 入库数量，默认为1
+      source TEXT,                              -- 来源
+      operator_id INTEGER,                      -- 操作员ID，外键
+      remark TEXT,                              -- 备注
+      FOREIGN KEY (book_id) REFERENCES book (book_id), -- 图书外键约束
+      FOREIGN KEY (operator_id) REFERENCES system_user (user_id) -- 操作员外键约束
     )
   `)
 
   // 出库记录表
+  // 跟踪图书出库情况
   db.exec(`
     CREATE TABLE IF NOT EXISTS inventory_out (
-      out_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      book_id INTEGER,
-      out_date TEXT DEFAULT (datetime('now', 'localtime')),
-      quantity INTEGER DEFAULT 1,
-      reason TEXT,
-      operator_id INTEGER,
-      remark TEXT,
-      FOREIGN KEY (book_id) REFERENCES book (book_id),
-      FOREIGN KEY (operator_id) REFERENCES system_user (user_id)
+      out_id INTEGER PRIMARY KEY AUTOINCREMENT, -- 出库记录ID，自增主键
+      book_id INTEGER,                          -- 图书ID，外键
+      out_date TEXT DEFAULT (datetime('now', 'localtime')), -- 出库日期，默认为当前时间
+      quantity INTEGER DEFAULT 1,               -- 出库数量，默认为1
+      reason TEXT,                              -- 原因
+      operator_id INTEGER,                      -- 操作员ID，外键
+      remark TEXT,                              -- 备注
+      FOREIGN KEY (book_id) REFERENCES book (book_id), -- 图书外键约束
+      FOREIGN KEY (operator_id) REFERENCES system_user (user_id) -- 操作员外键约束
     )
   `)
 
   // 读者类型表
+  // 定义不同类型读者的借阅权限
   db.exec(`
     CREATE TABLE IF NOT EXISTS reader_type (
-      type_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      type_name TEXT NOT NULL,
-      max_borrow_count INTEGER DEFAULT 5,
-      max_borrow_days INTEGER DEFAULT 30,
-      can_renew INTEGER DEFAULT 1, -- 0:不可续借, 1:可续借
-      max_renew_count INTEGER DEFAULT 1
+      type_id INTEGER PRIMARY KEY AUTOINCREMENT, -- 类型ID，自增主键
+      type_name TEXT NOT NULL,                   -- 类型名称，必填
+      max_borrow_count INTEGER DEFAULT 5,        -- 最大借阅数量，默认5本
+      max_borrow_days INTEGER DEFAULT 30,        -- 最大借阅天数，默认30天
+      can_renew INTEGER DEFAULT 1,               -- 是否可续借：0不可，1可
+      max_renew_count INTEGER DEFAULT 1          -- 最大续借次数，默认1次
     )
   `)
 
   // 读者表
+  // 存储借阅者信息
   db.exec(`
     CREATE TABLE IF NOT EXISTS reader (
-      reader_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      gender TEXT, -- '男', '女', '其他'
-      id_card TEXT,
-      phone TEXT,
-      email TEXT,
-      address TEXT,
-      register_date TEXT DEFAULT (datetime('now', 'localtime')),
-      status INTEGER DEFAULT 1, -- 1:正常, 2:暂停, 3:注销
-      borrow_quota INTEGER,
-      type_id INTEGER,
-      FOREIGN KEY (type_id) REFERENCES reader_type (type_id)
+      reader_id INTEGER PRIMARY KEY AUTOINCREMENT, -- 读者ID，自增主键
+      name TEXT NOT NULL,                          -- 姓名，必填
+      gender TEXT,                                 -- 性别：'男', '女', '其他'
+      id_card TEXT,                                -- 身份证号
+      phone TEXT,                                  -- 电话
+      email TEXT,                                  -- 电子邮件
+      address TEXT,                                -- 地址
+      register_date TEXT DEFAULT (datetime('now', 'localtime')), -- 注册日期，默认当前时间
+      status INTEGER DEFAULT 1,                    -- 状态：1正常，2暂停，3注销
+      borrow_quota INTEGER,                        -- 借阅配额
+      type_id INTEGER,                             -- 读者类型ID，外键
+      FOREIGN KEY (type_id) REFERENCES reader_type (type_id) -- 读者类型外键约束
     )
   `)
 
   // 借阅记录表
+  // 跟踪图书借阅情况
   db.exec(`
     CREATE TABLE IF NOT EXISTS borrow_record (
-      borrow_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      book_id INTEGER,
-      reader_id INTEGER,
-      borrow_date TEXT DEFAULT (datetime('now', 'localtime')),
-      due_date TEXT,
-      return_date TEXT,
-      renew_count INTEGER DEFAULT 0,
-      fine_amount REAL DEFAULT 0.0,
-      status INTEGER DEFAULT 1, -- 1:借出, 2:已归还, 3:逾期, 4:续借
-      operator_id INTEGER,
-      FOREIGN KEY (book_id) REFERENCES book (book_id),
-      FOREIGN KEY (reader_id) REFERENCES reader (reader_id),
-      FOREIGN KEY (operator_id) REFERENCES system_user (user_id)
+      borrow_id INTEGER PRIMARY KEY AUTOINCREMENT, -- 借阅记录ID，自增主键
+      book_id INTEGER,                             -- 图书ID，外键
+      reader_id INTEGER,                           -- 读者ID，外键
+      borrow_date TEXT DEFAULT (datetime('now', 'localtime')), -- 借阅日期，默认当前时间
+      due_date TEXT,                               -- 应还日期
+      return_date TEXT,                            -- 实际归还日期
+      renew_count INTEGER DEFAULT 0,               -- 续借次数，默认0
+      fine_amount REAL DEFAULT 0.0,                -- 罚款金额，默认0
+      status INTEGER DEFAULT 1,                    -- 状态：1借出，2已归还，3逾期，4续借
+      operator_id INTEGER,                         -- 操作员ID，外键
+      FOREIGN KEY (book_id) REFERENCES book (book_id), -- 图书外键约束
+      FOREIGN KEY (reader_id) REFERENCES reader (reader_id), -- 读者外键约束
+      FOREIGN KEY (operator_id) REFERENCES system_user (user_id) -- 操作员外键约束
     )
   `)
 
   // 预约记录表
+  // 跟踪图书预约情况
   db.exec(`
     CREATE TABLE IF NOT EXISTS reservation (
-      reservation_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      book_id INTEGER,
-      reader_id INTEGER,
-      reserve_date TEXT DEFAULT (datetime('now', 'localtime')),
-      expiry_date TEXT,
-      status INTEGER DEFAULT 1, -- 1:预约中, 2:已借出, 3:已过期, 4:已取消
-      FOREIGN KEY (book_id) REFERENCES book (book_id),
-      FOREIGN KEY (reader_id) REFERENCES reader (reader_id)
+      reservation_id INTEGER PRIMARY KEY AUTOINCREMENT, -- 预约ID，自增主键
+      book_id INTEGER,                                  -- 图书ID，外键
+      reader_id INTEGER,                                -- 读者ID，外键
+      reserve_date TEXT DEFAULT (datetime('now', 'localtime')), -- 预约日期，默认当前时间
+      expiry_date TEXT,                                 -- 预约过期日期
+      status INTEGER DEFAULT 1,                         -- 状态：1预约中，2已借出，3已过期，4已取消
+      FOREIGN KEY (book_id) REFERENCES book (book_id), -- 图书外键约束
+      FOREIGN KEY (reader_id) REFERENCES reader (reader_id) -- 读者外键约束
     )
   `)
 
   // 系统角色表
+  // 定义系统用户角色及权限
   db.exec(`
     CREATE TABLE IF NOT EXISTS system_role (
-      role_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      role_name TEXT NOT NULL,
-      permissions TEXT
+      role_id INTEGER PRIMARY KEY AUTOINCREMENT, -- 角色ID，自增主键
+      role_name TEXT NOT NULL,                   -- 角色名称，必填
+      permissions TEXT                           -- 权限列表
     )
   `)
 
   // 系统用户表
+  // 存储系统操作人员信息
   db.exec(`
     CREATE TABLE IF NOT EXISTS system_user (
-      user_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      username TEXT NOT NULL UNIQUE,
-      password_hash TEXT NOT NULL,
-      real_name TEXT,
-      role_id INTEGER,
-      phone TEXT,
-      email TEXT,
-      status INTEGER DEFAULT 1, -- 1:正常, 2:锁定, 3:禁用
-      last_login TEXT,
-      FOREIGN KEY (role_id) REFERENCES system_role (role_id)
+      user_id INTEGER PRIMARY KEY AUTOINCREMENT, -- 用户ID，自增主键
+      username TEXT NOT NULL UNIQUE,             -- 用户名，唯一
+      password_hash TEXT NOT NULL,               -- 密码哈希值，必填
+      real_name TEXT,                            -- 真实姓名
+      role_id INTEGER,                           -- 角色ID，外键
+      phone TEXT,                                -- 电话
+      email TEXT,                                -- 电子邮件
+      status INTEGER DEFAULT 1,                  -- 状态：1正常，2锁定，3禁用
+      last_login TEXT,                           -- 最后登录时间
+      FOREIGN KEY (role_id) REFERENCES system_role (role_id) -- 角色外键约束
     )
   `)
 
   // 操作日志表
+  // 记录系统操作日志，便于审计和追踪
   db.exec(`
     CREATE TABLE IF NOT EXISTS operation_log (
-      log_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER,
-      operation TEXT,
-      operation_time TEXT DEFAULT (datetime('now', 'localtime')),
-      ip TEXT,
-      details TEXT,
-      FOREIGN KEY (user_id) REFERENCES system_user (user_id)
+      log_id INTEGER PRIMARY KEY AUTOINCREMENT, -- 日志ID，自增主键
+      user_id INTEGER,                          -- 用户ID，外键
+      operation TEXT,                           -- 操作描述
+      operation_time TEXT DEFAULT (datetime('now', 'localtime')), -- 操作时间，默认当前时间
+      ip TEXT,                                  -- 操作IP
+      details TEXT,                             -- 详细信息
+      FOREIGN KEY (user_id) REFERENCES system_user (user_id) -- 用户外键约束
     )
   `)
 
   // 系统配置表
+  // 存储系统配置参数
   db.exec(`
     CREATE TABLE IF NOT EXISTS system_config (
-      config_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      config_key TEXT NOT NULL UNIQUE,
-      config_value TEXT,
-      description TEXT
+      config_id INTEGER PRIMARY KEY AUTOINCREMENT, -- 配置ID，自增主键
+      config_key TEXT NOT NULL UNIQUE,             -- 配置键，唯一
+      config_value TEXT,                           -- 配置值
+      description TEXT                             -- 配置描述
     )
   `)
 
   // 数据备份表
+  // 记录数据库备份历史
   db.exec(`
     CREATE TABLE IF NOT EXISTS data_backup (
-      backup_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      backup_date TEXT DEFAULT (datetime('now', 'localtime')),
-      backup_path TEXT,
-      backup_size TEXT,
-      operator_id INTEGER,
-      remark TEXT,
-      FOREIGN KEY (operator_id) REFERENCES system_user (user_id)
+      backup_id INTEGER PRIMARY KEY AUTOINCREMENT, -- 备份ID，自增主键
+      backup_date TEXT DEFAULT (datetime('now', 'localtime')), -- 备份日期，默认当前时间
+      backup_path TEXT,                           -- 备份文件路径
+      backup_size TEXT,                           -- 备份大小
+      operator_id INTEGER,                        -- 操作员ID，外键
+      remark TEXT,                                -- 备注
+      FOREIGN KEY (operator_id) REFERENCES system_user (user_id) -- 操作员外键约束
     )
   `)
 
   // 统计报表表
+  // 记录生成的统计报表
   db.exec(`
     CREATE TABLE IF NOT EXISTS stat_report (
-      report_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      report_name TEXT,
-      report_type TEXT,
-      generate_date TEXT DEFAULT (datetime('now', 'localtime')),
-      stats_period TEXT,
-      operator_id INTEGER,
-      report_path TEXT,
-      FOREIGN KEY (operator_id) REFERENCES system_user (user_id)
+      report_id INTEGER PRIMARY KEY AUTOINCREMENT, -- 报表ID，自增主键
+      report_name TEXT,                           -- 报表名称
+      report_type TEXT,                           -- 报表类型
+      generate_date TEXT DEFAULT (datetime('now', 'localtime')), -- 生成日期，默认当前时间
+      stats_period TEXT,                          -- 统计周期
+      operator_id INTEGER,                        -- 操作员ID，外键
+      report_path TEXT,                           -- 报表文件路径
+      FOREIGN KEY (operator_id) REFERENCES system_user (user_id) -- 操作员外键约束
     )
   `)
 }
 
-// 初始化基础数据
-// 初始化基础数据
+// 初始化基础数据函数
+// 该函数负责在表创建后填充初始数据
 function initBaseData(db: Database.Database): void {
-  // 检查是否已经有系统角色数据，如果没有则插入
+  // 检查是否已有系统角色数据，避免重复插入
   const roleCount = db.prepare('SELECT COUNT(*) as count FROM system_role').get() as {
     count: number
   }
 
+  // 只有当系统角色表为空时才进行初始化
   if (roleCount.count === 0) {
     // 开始事务
+    // 使用事务确保数据完整性，若有任何错误会进行回滚
     db.exec('BEGIN TRANSACTION')
 
     try {
       // 插入默认角色
+      // 创建三种默认角色：系统管理员、图书管理员和普通操作员
       db.prepare(
         `
         INSERT INTO system_role (role_name, permissions)
@@ -290,7 +319,8 @@ function initBaseData(db: Database.Database): void {
       `
       ).run()
 
-      // 插入默认管理员账号以及操作员账号
+      // 插入默认管理员账号和操作员账号
+      // 初始密码使用SHA-256哈希值('admin123'的哈希)
       db.prepare(
         `
         INSERT INTO system_user (username, password_hash, real_name, role_id, status)
@@ -303,18 +333,20 @@ function initBaseData(db: Database.Database): void {
       ).run()
 
       // 插入默认读者类型
+      // 创建四种读者类型，有不同的借阅权限
       db.prepare(
         `
         INSERT INTO reader_type (type_name, max_borrow_count, max_borrow_days, can_renew, max_renew_count)
         VALUES
-          ('普通读者', 5, 30, 1, 1),
-          ('VIP读者', 10, 60, 1, 2),
-          ('教师', 15, 90, 1, 3),
-          ('学生', 3, 15, 1, 1)
+          ('普通读者', 5, 30, 1, 1),  -- 普通读者：最多借5本，30天，可续借1次
+          ('VIP读者', 10, 60, 1, 2),  -- VIP读者：最多借10本，60天，可续借2次
+          ('教师', 15, 90, 1, 3),     -- 教师：最多借15本，90天，可续借3次
+          ('学生', 3, 15, 1, 1)       -- 学生：最多借3本，15天，可续借1次
       `
       ).run()
 
       // 插入示例读者
+      // 创建15个不同类型的读者样本数据
       db.prepare(
         `
         INSERT INTO reader (name, gender, id_card, phone, email, address, status, borrow_quota, type_id)
@@ -338,6 +370,7 @@ function initBaseData(db: Database.Database): void {
       ).run()
 
       // 插入默认系统配置
+      // 设置系统基本参数
       db.prepare(
         `
         INSERT INTO system_config (config_key, config_value, description)
@@ -350,25 +383,35 @@ function initBaseData(db: Database.Database): void {
       ).run()
 
       // 插入图书分类数据
+      // 创建两级图书分类结构
       db.prepare(
         `
         INSERT INTO book_category (category_name, category_code, parent_id, level, description)
         VALUES
+          -- 一级分类
           ('计算机科学', 'CS', NULL, 1, '计算机相关书籍'),
           ('文学艺术', 'LIT', NULL, 1, '文学与艺术类书籍'),
           ('自然科学', 'SCI', NULL, 1, '自然科学类书籍'),
           ('社会科学', 'SOC', NULL, 1, '社会科学类书籍'),
+
+          -- 计算机科学的二级分类
           ('编程语言', 'PRG', 1, 2, '编程语言相关书籍'),
           ('数据库', 'DB', 1, 2, '数据库相关书籍'),
           ('软件工程', 'SE', 1, 2, '软件工程相关书籍'),
           ('人工智能', 'AI', 1, 2, '人工智能相关书籍'),
           ('网络安全', 'SEC', 1, 2, '网络安全相关书籍'),
+
+          -- 文学艺术的二级分类
           ('现代文学', 'ML', 2, 2, '现代文学作品'),
           ('古典文学', 'CL', 2, 2, '古典文学作品'),
           ('艺术理论', 'AT', 2, 2, '艺术理论书籍'),
+
+          -- 自然科学的二级分类
           ('物理学', 'PHY', 3, 2, '物理学相关书籍'),
           ('化学', 'CHE', 3, 2, '化学相关书籍'),
           ('生物学', 'BIO', 3, 2, '生物学相关书籍'),
+
+          -- 社会科学的二级分类
           ('经济学', 'ECO', 4, 2, '经济学相关书籍'),
           ('社会学', 'SOL', 4, 2, '社会学相关书籍'),
           ('心理学', 'PSY', 4, 2, '心理学相关书籍')
@@ -376,6 +419,7 @@ function initBaseData(db: Database.Database): void {
       ).run()
 
       // 插入出版社数据
+      // 创建8个常见出版社样本
       db.prepare(
         `
         INSERT INTO publisher (name, address, contact_person, phone, email, website, description)
@@ -392,6 +436,7 @@ function initBaseData(db: Database.Database): void {
       ).run()
 
       // 插入图书数据
+      // 创建46本不同类型、不同状态的图书样本
       db.prepare(
         `
         INSERT INTO book (isbn, title, author, publisher_id, publish_date, price, category_id, location, description, status)
@@ -446,6 +491,7 @@ function initBaseData(db: Database.Database): void {
       ).run()
 
       // 插入标签数据
+      // 创建32个分类标签，用于多维度标记图书
       db.prepare(
         `
         INSERT INTO tag (tag_name, description)
@@ -485,7 +531,8 @@ function initBaseData(db: Database.Database): void {
         `
       ).run()
 
-      // 插入图书-标签关联数据（为新增的图书添加标签）
+      // 插入图书-标签关联数据
+      // 为图书添加多个标签，建立多对多关系
       db.prepare(
         `
         INSERT INTO book_tag (book_id, tag_id)
@@ -547,7 +594,8 @@ function initBaseData(db: Database.Database): void {
         `
       ).run()
 
-      // 插入入库记录数据（包括新增图书）
+      // 插入入库记录数据
+      // 记录图书入库历史，分批次入库
       db.prepare(
         `
         INSERT INTO inventory_in (book_id, in_date, quantity, source, operator_id, remark)
@@ -572,7 +620,6 @@ function initBaseData(db: Database.Database): void {
           (18, datetime('now', '-52 days'), 4, '采购', 1, '首批采购'),
           (19, datetime('now', '-51 days'), 4, '采购', 1, '首批采购'),
           (20, datetime('now', '-51 days'), 5, '采购', 1, '首批采购'),
-          -- 新增入库记录
           (21, datetime('now', '-50 days'), 3, '采购', 1, '第二批采购'),
           (22, datetime('now', '-50 days'), 3, '采购', 1, '第二批采购'),
           (23, datetime('now', '-49 days'), 2, '采购', 1, '第二批采购'),
@@ -602,7 +649,8 @@ function initBaseData(db: Database.Database): void {
         `
       ).run()
 
-      // 插入出库记录（示例）
+      // 插入出库记录
+      // 记录因损坏、丢失等原因的图书出库
       db.prepare(
         `
         INSERT INTO inventory_out (book_id, out_date, quantity, reason, operator_id, remark)
@@ -612,8 +660,8 @@ function initBaseData(db: Database.Database): void {
         `
       ).run()
 
-      // 插入多样化借阅记录
-      // 状态说明: 1:借出, 2:已归还, 3:逾期, 4:续借
+      // 插入借阅记录数据
+      // 创建多样化的借阅记录，包括当前借出、已归还、逾期等不同状态
       db.prepare(
         `
         INSERT INTO borrow_record (book_id, reader_id, borrow_date, due_date, return_date, renew_count, fine_amount, status, operator_id)
@@ -705,6 +753,7 @@ function initBaseData(db: Database.Database): void {
       ).run()
 
       // 插入预约记录
+      // 创建不同状态的预约记录
       db.prepare(
         `
         INSERT INTO reservation (book_id, reader_id, reserve_date, expiry_date, status)
@@ -726,10 +775,12 @@ function initBaseData(db: Database.Database): void {
       ).run()
 
       // 提交事务
+      // 所有数据插入成功后提交事务
       db.exec('COMMIT')
       console.log('成功初始化数据库')
     } catch (error) {
       // 发生错误，回滚事务
+      // 确保数据库一致性，避免部分数据插入
       db.exec('ROLLBACK')
       console.error('初始化数据库失败:', error)
       throw error

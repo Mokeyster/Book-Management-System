@@ -2,16 +2,30 @@ import Database from 'better-sqlite3'
 import { IBook } from '../../types/bookTypes'
 import { SystemService } from './systemService'
 
+/**
+ * 图书服务类
+ * 负责处理与图书相关的所有数据库操作，包括查询、添加、更新、删除等功能
+ */
 export class BookService {
+  /** SQLite 数据库实例 */
   private db: Database.Database
+  /** 系统服务实例，用于记录操作日志等系统功能 */
   private systemService: SystemService
 
+  /**
+   * 构造函数
+   * @param db SQLite 数据库实例
+   */
   constructor(db: Database.Database) {
     this.db = db
     this.systemService = new SystemService(db)
   }
 
-  // 获取所有图书
+  /**
+   * 获取所有未删除的图书
+   * 通过连接查询获取图书分类和出版社信息
+   * @returns 图书对象数组
+   */
   getAllBooks(): IBook[] {
     return this.db
       .prepare(
@@ -26,7 +40,11 @@ export class BookService {
       .all() as IBook[]
   }
 
-  // 根据ID获取图书
+  /**
+   * 根据ID获取特定图书
+   * @param bookId 图书ID
+   * @returns 图书对象，如未找到则返回undefined
+   */
   getBookById(bookId: number): IBook | undefined {
     return this.db
       .prepare(
@@ -41,7 +59,12 @@ export class BookService {
       .get(bookId) as IBook | undefined
   }
 
-  // 搜索图书
+  /**
+   * 搜索图书
+   * 根据书名、作者或ISBN进行模糊查询
+   * @param query 搜索关键词
+   * @returns 匹配的图书对象数组
+   */
   searchBooks(query: string): IBook[] {
     return this.db
       .prepare(
@@ -56,7 +79,12 @@ export class BookService {
       .all(`%${query}%`, `%${query}%`, `%${query}%`) as IBook[]
   }
 
-  // 添加新图书
+  /**
+   * 添加新图书
+   * @param book 图书对象（不含book_id）
+   * @param userId 操作用户ID，用于记录日志
+   * @returns 新增图书的ID
+   */
   addBook(book: Omit<IBook, 'book_id'>, userId?: number): number {
     const stmt = this.db.prepare(`
       INSERT INTO book (
@@ -65,6 +93,7 @@ export class BookService {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
 
+    // 执行插入操作
     const result = stmt.run(
       book.isbn,
       book.title,
@@ -75,9 +104,10 @@ export class BookService {
       book.category_id,
       book.location,
       book.description,
-      book.status || 1
+      book.status || 1 // 默认状态为1（在架）
     )
 
+    // 获取新插入图书的ID
     const bookId = result.lastInsertRowid as number
 
     // 记录操作日志
@@ -93,7 +123,12 @@ export class BookService {
     return bookId
   }
 
-  // 更新图书信息
+  /**
+   * 更新图书信息
+   * @param book 图书完整对象（含book_id）
+   * @param userId 操作用户ID，用于记录日志
+   * @returns 更新是否成功
+   */
   updateBook(book: IBook, userId?: number): boolean {
     const stmt = this.db.prepare(`
       UPDATE book SET
@@ -104,6 +139,7 @@ export class BookService {
       WHERE book_id = ?
     `)
 
+    // 执行更新操作
     const result = stmt.run(
       book.isbn,
       book.title,
@@ -118,6 +154,7 @@ export class BookService {
       book.book_id
     )
 
+    // 检查是否有记录被更新
     const success = result.changes > 0
 
     // 记录操作日志
@@ -133,7 +170,13 @@ export class BookService {
     return success
   }
 
-  // 软删除图书（将状态设置为"已删除"）
+  /**
+   * 软删除图书（将状态设置为"已删除"）
+   * 检查是否有未归还的借阅记录，如有则不允许删除
+   * @param bookId 图书ID
+   * @param userId 操作用户ID，用于记录日志
+   * @returns 操作结果对象，包含success和message字段
+   */
   deleteBook(bookId: number, userId?: number): { success: boolean; message: string } {
     try {
       // 检查是否有未归还的借阅记录
@@ -143,6 +186,7 @@ export class BookService {
         )
         .get(bookId) as { count: number }
 
+      // 如果有未归还的借阅记录，拒绝删除
       if (activeBorrows && activeBorrows.count > 0) {
         return { success: false, message: '该图书有未归还的借阅记录，不能删除' }
       }
@@ -150,7 +194,7 @@ export class BookService {
       // 获取图书信息用于日志
       const book = this.getBookById(bookId)
 
-      // 将图书状态更新为"已删除"(假设用6表示已删除状态)
+      // 将图书状态更新为"已删除"(状态码6表示已删除)
       const stmt = this.db.prepare(`
         UPDATE book SET
           status = 6,
@@ -181,12 +225,23 @@ export class BookService {
     }
   }
 
-  // 如果需要真正从数据库删除图书（管理员功能）
+  /**
+   * 物理删除图书（管理员功能）
+   * 从数据库中永久删除图书及其相关记录
+   * @param bookId 图书ID
+   * @returns 操作结果对象，包含success和message字段
+   */
   hardDeleteBook(bookId: number): { success: boolean; message: string } {
     return this.safeDeleteBook(bookId)
   }
 
-  // 安全删除图书（处理所有外键关系）
+  /**
+   * 安全删除图书（处理所有外键关系）
+   * 通过事务处理删除图书和所有相关记录
+   * @param bookId 图书ID
+   * @returns 操作结果对象，包含success和message字段
+   * @private 私有方法，只在类内部使用
+   */
   private safeDeleteBook(bookId: number): { success: boolean; message: string } {
     try {
       // 开始事务
@@ -226,7 +281,13 @@ export class BookService {
     }
   }
 
-  // 更新图书状态
+  /**
+   * 更新图书状态
+   * @param bookId 图书ID
+   * @param status 新状态码
+   * @param userId 操作用户ID，用于记录日志
+   * @returns 更新是否成功
+   */
   updateBookStatus(bookId: number, status: number, userId?: number): boolean {
     const stmt = this.db.prepare(`
       UPDATE book SET
@@ -253,7 +314,13 @@ export class BookService {
     return success
   }
 
-  // 获取状态文本
+  /**
+   * 获取状态文本描述
+   * 将状态码转换为可读的文本描述
+   * @param status 状态码
+   * @returns 状态文本
+   * @private 私有方法，只在类内部使用
+   */
   private getStatusText(status: number): string {
     const statusMap = {
       1: '在架',
@@ -266,7 +333,11 @@ export class BookService {
     return statusMap[status] || '未知状态'
   }
 
-  // 获取图书的标签
+  /**
+   * 获取图书的标签
+   * @param bookId 图书ID
+   * @returns 标签对象数组，包含tag_id和tag_name
+   */
   getBookTags(bookId: number): { tag_id: number; tag_name: string }[] {
     return this.db
       .prepare(
@@ -280,7 +351,12 @@ export class BookService {
       .all(bookId) as { tag_id: number; tag_name: string }[]
   }
 
-  // 为图书添加标签
+  /**
+   * 为图书添加标签
+   * @param bookId 图书ID
+   * @param tagId 标签ID
+   * @returns 添加是否成功
+   */
   addBookTag(bookId: number, tagId: number): boolean {
     try {
       this.db
@@ -293,11 +369,17 @@ export class BookService {
         .run(bookId, tagId)
       return true
     } catch (_error) {
+      // 如果标签已存在，将抛出唯一约束错误，此时返回false
       return false
     }
   }
 
-  // 删除图书标签
+  /**
+   * 删除图书标签
+   * @param bookId 图书ID
+   * @param tagId 标签ID
+   * @returns 删除是否成功
+   */
   removeBookTag(bookId: number, tagId: number): boolean {
     const stmt = this.db.prepare(`
       DELETE FROM book_tag
@@ -308,7 +390,11 @@ export class BookService {
     return result.changes > 0
   }
 
-  // 图书分类管理相关方法
+  /**
+   * 获取所有图书分类
+   * 按层级和分类ID排序
+   * @returns 分类对象数组
+   */
   getAllCategories(): any[] {
     return this.db
       .prepare(
@@ -320,6 +406,11 @@ export class BookService {
       .all()
   }
 
+  /**
+   * 根据ID获取特定分类
+   * @param categoryId 分类ID
+   * @returns 分类对象
+   */
   getCategoryById(categoryId: number): any {
     return this.db
       .prepare(
@@ -331,6 +422,12 @@ export class BookService {
       .get(categoryId)
   }
 
+  /**
+   * 添加新分类
+   * @param category 分类对象
+   * @param userId 操作用户ID，用于记录日志
+   * @returns 新增分类的ID，如失败则返回0
+   */
   addCategory(category: any, userId?: number): number {
     const stmt = this.db.prepare(`
       INSERT INTO book_category (category_name, category_code, parent_id, level, description)
@@ -363,6 +460,12 @@ export class BookService {
     return 0
   }
 
+  /**
+   * 更新分类信息
+   * @param category 分类对象
+   * @param userId 操作用户ID，用于记录日志
+   * @returns 更新是否成功
+   */
   updateCategory(category: any, userId?: number): boolean {
     const stmt = this.db.prepare(`
       UPDATE book_category
@@ -395,6 +498,13 @@ export class BookService {
     return success
   }
 
+  /**
+   * 删除分类
+   * 检查是否有图书使用此分类或有子分类，如有则不允许删除
+   * @param categoryId 分类ID
+   * @param userId 操作用户ID，用于记录日志
+   * @returns 操作结果对象，包含success和message字段
+   */
   deleteCategory(categoryId: number, userId?: number): { success: boolean; message: string } {
     // 检查是否有图书使用此分类
     const booksWithCategory = this.db
@@ -435,7 +545,11 @@ export class BookService {
     return { success, message: '' }
   }
 
-  // 获取分类树形结构
+  /**
+   * 获取分类树形结构
+   * 将平面分类列表转换为树形结构
+   * @returns 树形结构的分类数组
+   */
   getCategoryTree(): any[] {
     // 获取所有分类
     const categories = this.getAllCategories()

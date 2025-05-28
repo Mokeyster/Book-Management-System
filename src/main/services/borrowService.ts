@@ -2,16 +2,27 @@ import Database from 'better-sqlite3'
 import { IBorrowRecord, IBorrowRequest, IReservation } from '../../types/borrowTypes'
 import { SystemService } from './systemService'
 
+/**
+ * 图书借阅服务类 - 处理所有与借阅相关的业务逻辑
+ * 包括借书、还书、续借、预约等功能
+ */
 export class BorrowService {
   private db: Database.Database
   private systemService: SystemService
 
+  /**
+   * 构造函数
+   * @param db 数据库连接实例
+   */
   constructor(db: Database.Database) {
     this.db = db
     this.systemService = new SystemService(db)
   }
 
-  // 获取所有借阅记录（排除已删除图书和已删除读者）
+  /**
+   * 获取所有借阅记录（排除已删除图书和已删除读者）
+   * @returns 借阅记录数组
+   */
   getAllBorrowRecords(): IBorrowRecord[] {
     return this.db
       .prepare(
@@ -28,7 +39,11 @@ export class BorrowService {
       .all() as IBorrowRecord[]
   }
 
-  // 根据ID获取借阅记录（排除已删除图书和已删除读者）
+  /**
+   * 根据ID获取借阅记录（排除已删除图书和已删除读者）
+   * @param borrowId 借阅记录ID
+   * @returns 借阅记录对象或undefined（如果不存在）
+   */
   getBorrowRecordById(borrowId: number): IBorrowRecord | undefined {
     return this.db
       .prepare(
@@ -44,7 +59,10 @@ export class BorrowService {
       .get(borrowId) as IBorrowRecord | undefined
   }
 
-  // 获取当前借出的图书（排除已删除图书和已删除读者）
+  /**
+   * 获取当前借出的图书（排除已删除图书和已删除读者）
+   * @returns 当前借出的借阅记录数组
+   */
   getCurrentBorrows(): IBorrowRecord[] {
     return this.db
       .prepare(
@@ -61,7 +79,11 @@ export class BorrowService {
       .all() as IBorrowRecord[]
   }
 
-  // 获取指定图书的借阅历史（排除已删除读者）
+  /**
+   * 获取指定图书的借阅历史（排除已删除读者）
+   * @param bookId 图书ID
+   * @returns 该图书的借阅记录数组
+   */
   getBookBorrowHistory(bookId: number): IBorrowRecord[] {
     return this.db
       .prepare(
@@ -78,7 +100,11 @@ export class BorrowService {
       .all(bookId) as IBorrowRecord[]
   }
 
-  // 获取指定读者的借阅历史（新方法）
+  /**
+   * 获取指定读者的借阅历史（排除已删除图书）
+   * @param readerId 读者ID
+   * @returns 该读者的借阅记录数组
+   */
   getReaderBorrowHistory(readerId: number): IBorrowRecord[] {
     return this.db
       .prepare(
@@ -95,7 +121,10 @@ export class BorrowService {
       .all(readerId) as IBorrowRecord[]
   }
 
-  // 获取逾期借阅（排除已删除图书和已删除读者）
+  /**
+   * 获取逾期借阅（排除已删除图书和已删除读者）
+   * @returns 逾期的借阅记录数组
+   */
   getOverdueBorrows(): IBorrowRecord[] {
     return this.db
       .prepare(
@@ -112,14 +141,18 @@ export class BorrowService {
       .all() as IBorrowRecord[]
   }
 
-  // 借书
+  /**
+   * 借书
+   * @param borrowRequest 借阅请求对象，包含图书ID、读者ID和操作员ID
+   * @returns 操作结果，包含成功状态、消息和借阅ID（如果成功）
+   */
   borrowBook(borrowRequest: IBorrowRequest): {
     success: boolean
     message: string
     borrowId?: number
   } {
     try {
-      // 开始事务
+      // 开始事务，确保数据的完整性
       this.db.prepare('BEGIN').run()
 
       // 检查图书是否可借
@@ -132,18 +165,19 @@ export class BorrowService {
         return { success: false, message: '图书不存在' }
       }
 
-      // 检查图书是否已删除
+      // 检查图书是否已删除（状态6表示已删除）
       if (book.status === 6) {
         this.db.prepare('ROLLBACK').run()
         return { success: false, message: '该图书已删除，无法借阅' }
       }
 
+      // 检查图书是否在库（状态1表示在库）
       if (book.status !== 1) {
         this.db.prepare('ROLLBACK').run()
         return { success: false, message: '图书不可借阅，当前状态不是在库' }
       }
 
-      // 检查读者是否可以借书
+      // 检查读者是否可以借书，包括读者类型和最大借阅数量
       const reader = this.db
         .prepare(
           `
@@ -160,18 +194,19 @@ export class BorrowService {
         return { success: false, message: '读者不存在' }
       }
 
-      // 检查读者是否已删除
+      // 检查读者是否已删除（状态3表示已注销）
       if (reader.status === 3) {
         this.db.prepare('ROLLBACK').run()
         return { success: false, message: '该读者已被注销，无法借阅' }
       }
 
+      // 检查读者状态是否正常（状态1表示正常）
       if (reader.status !== 1) {
         this.db.prepare('ROLLBACK').run()
         return { success: false, message: '读者状态异常，无法借阅' }
       }
 
-      // 检查读者当前借阅数量
+      // 检查读者当前借阅数量是否已达到上限
       const borrowCount = this.db
         .prepare(
           `
@@ -188,12 +223,12 @@ export class BorrowService {
         return { success: false, message: '已达到最大借阅数量' }
       }
 
-      // 获取系统配置
+      // 获取读者类型配置以确定借阅期限
       const readerType = this.db
         .prepare('SELECT * FROM reader_type WHERE type_id = ?')
         .get(reader.type_id) as any
 
-      // 设置借阅期限
+      // 设置借阅日期和应还日期
       const borrowDate = new Date()
       const dueDate = new Date()
       dueDate.setDate(dueDate.getDate() + readerType.max_borrow_days)
@@ -208,15 +243,15 @@ export class BorrowService {
       const insertResult = stmt.run(
         borrowRequest.book_id,
         borrowRequest.reader_id,
-        borrowDate.toISOString().split('T')[0],
-        dueDate.toISOString().split('T')[0],
+        borrowDate.toISOString().split('T')[0], // 格式化为yyyy-MM-dd
+        dueDate.toISOString().split('T')[0], // 格式化为yyyy-MM-dd
         borrowRequest.operator_id
       )
 
-      // 更新图书状态
+      // 更新图书状态为借出（状态2）
       this.db.prepare('UPDATE book SET status = 2 WHERE book_id = ?').run(borrowRequest.book_id)
 
-      // 如果有预约，更新预约状态
+      // 如果该读者之前有预约该图书，则更新预约状态为已借阅（状态2）
       this.db
         .prepare(
           `
@@ -254,6 +289,7 @@ export class BorrowService {
         borrowId
       }
     } catch (error) {
+      // 如果发生错误，回滚事务
       this.db.prepare('ROLLBACK').run()
       return {
         success: false,
@@ -262,7 +298,12 @@ export class BorrowService {
     }
   }
 
-  // 归还图书
+  /**
+   * 归还图书
+   * @param borrowId 借阅记录ID
+   * @param userId 操作用户ID（可选）
+   * @returns 操作结果，包含成功状态、消息和罚款金额（如果有）
+   */
   returnBook(
     borrowId: number,
     userId?: number
@@ -291,30 +332,33 @@ export class BorrowService {
         return { success: false, message: '借阅记录不存在' }
       }
 
+      // 检查图书是否已归还（状态2表示已归还）
       if (borrowRecord.status === 2) {
         this.db.prepare('ROLLBACK').run()
         return { success: false, message: '图书已归还' }
       }
 
-      // 计算罚款
+      // 计算罚款（如果超过应还日期）
       let fineAmount = 0
       const returnDate = new Date()
       const dueDate = new Date(borrowRecord.due_date)
 
       if (returnDate > dueDate) {
+        // 计算逾期天数
         const overdueDays = Math.ceil(
           (returnDate.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24)
         )
-        // 获取罚款率
+        // 获取罚款率（从系统配置中）
         const fineRateResult = this.db
           .prepare("SELECT config_value FROM system_config WHERE config_key = 'fine_rate'")
           .get() as { config_value: string } | undefined
         const fineRate = fineRateResult ? parseFloat(fineRateResult.config_value) : 0.5
 
+        // 计算总罚款金额
         fineAmount = overdueDays * fineRate
       }
 
-      // 更新借阅记录
+      // 更新借阅记录为已归还状态，记录归还日期和罚款金额
       this.db
         .prepare(
           `
@@ -327,7 +371,7 @@ export class BorrowService {
         )
         .run(fineAmount, borrowId)
 
-      // 如果图书未被删除，更新图书状态为在库
+      // 如果图书未被删除，更新图书状态为在库（状态1）
       if (borrowRecord.book_status !== 6) {
         this.db.prepare('UPDATE book SET status = 1 WHERE book_id = ?').run(borrowRecord.book_id)
       }
@@ -358,6 +402,7 @@ export class BorrowService {
         fine: fineAmount
       }
     } catch (error) {
+      // 如果发生错误，回滚事务
       this.db.prepare('ROLLBACK').run()
       return {
         success: false,
@@ -366,7 +411,12 @@ export class BorrowService {
     }
   }
 
-  // 续借图书（不改变借阅状态，只更新到期日期和续借次数）
+  /**
+   * 续借图书（不改变借阅状态，只更新到期日期和续借次数）
+   * @param borrowId 借阅记录ID
+   * @param userId 操作用户ID（可选）
+   * @returns 操作结果，包含成功状态、消息和新的到期日期（如果成功）
+   */
   renewBook(
     borrowId: number,
     userId?: number
@@ -407,6 +457,7 @@ export class BorrowService {
         return { success: false, message: '该读者已被注销，无法续借' }
       }
 
+      // 检查图书是否已归还
       if (borrowRecord.status === 2) {
         this.db.prepare('ROLLBACK').run()
         return { success: false, message: '图书已归还，无法续借' }
@@ -429,17 +480,19 @@ export class BorrowService {
         return { success: false, message: '读者信息不存在' }
       }
 
+      // 检查该读者类型是否允许续借
       if (reader.can_renew !== 1) {
         this.db.prepare('ROLLBACK').run()
         return { success: false, message: '该读者类型不允许续借' }
       }
 
+      // 检查是否超过最大续借次数
       if (borrowRecord.renew_count >= reader.max_renew_count) {
         this.db.prepare('ROLLBACK').run()
         return { success: false, message: '已达到最大续借次数' }
       }
 
-      // 设置新的应还日期
+      // 计算新的应还日期（从当前应还日期起，再加上借阅天数）
       const dueDate = new Date(borrowRecord.due_date)
       dueDate.setDate(dueDate.getDate() + reader.max_borrow_days)
       const newDueDate = dueDate.toISOString().split('T')[0]
@@ -490,6 +543,7 @@ export class BorrowService {
         newDueDate
       }
     } catch (error) {
+      // 如果发生错误，回滚事务
       this.db.prepare('ROLLBACK').run()
       return {
         success: false,
@@ -498,7 +552,12 @@ export class BorrowService {
     }
   }
 
-  // 预约图书
+  /**
+   * 预约图书
+   * @param bookId 图书ID
+   * @param readerId 读者ID
+   * @returns 操作结果，包含成功状态、消息和预约ID（如果成功）
+   */
   reserveBook(
     bookId: number,
     readerId: number
@@ -539,6 +598,7 @@ export class BorrowService {
         return { success: false, message: '该读者已被注销，无法预约' }
       }
 
+      // 检查读者状态是否正常
       if (reader.status !== 1) {
         this.db.prepare('ROLLBACK').run()
         return { success: false, message: '读者状态异常，无法预约' }
@@ -572,7 +632,7 @@ export class BorrowService {
 
       const result = stmt.run(bookId, readerId, expiryDate.toISOString().split('T')[0])
 
-      // 如果图书在库，则更新状态为已预约
+      // 如果图书在库，则更新状态为已预约（状态3）
       if (book.status === 1) {
         this.db.prepare('UPDATE book SET status = 3 WHERE book_id = ?').run(bookId)
       }
@@ -586,6 +646,7 @@ export class BorrowService {
         reservationId: result.lastInsertRowid as number
       }
     } catch (error) {
+      // 如果发生错误，回滚事务
       this.db.prepare('ROLLBACK').run()
       return {
         success: false,
@@ -594,7 +655,11 @@ export class BorrowService {
     }
   }
 
-  // 取消预约
+  /**
+   * 取消预约
+   * @param reservationId 预约ID
+   * @returns 操作结果，包含成功状态和消息
+   */
   cancelReservation(reservationId: number): { success: boolean; message: string } {
     try {
       // 开始事务
@@ -620,12 +685,13 @@ export class BorrowService {
         return { success: false, message: '预约记录不存在' }
       }
 
+      // 检查预约是否可以取消（只有状态为1-待处理的预约可以取消）
       if (reservation.status !== 1) {
         this.db.prepare('ROLLBACK').run()
         return { success: false, message: '预约已处理，无法取消' }
       }
 
-      // 更新预约状态
+      // 更新预约状态为已取消（状态4）
       this.db
         .prepare('UPDATE reservation SET status = 4 WHERE reservation_id = ?')
         .run(reservationId)
@@ -650,6 +716,7 @@ export class BorrowService {
             .prepare('SELECT status FROM book WHERE book_id = ?')
             .get(reservation.book_id) as { status: number }
 
+          // 如果图书状态为已预约（状态3），则更新为在库（状态1）
           if (book.status === 3) {
             this.db.prepare('UPDATE book SET status = 1 WHERE book_id = ?').run(reservation.book_id)
           }
@@ -661,6 +728,7 @@ export class BorrowService {
 
       return { success: true, message: '取消预约成功' }
     } catch (error) {
+      // 如果发生错误，回滚事务
       this.db.prepare('ROLLBACK').run()
       return {
         success: false,
@@ -669,7 +737,10 @@ export class BorrowService {
     }
   }
 
-  // 获取所有预约（排除已删除图书和已删除读者）
+  /**
+   * 获取所有预约（排除已删除图书和已删除读者）
+   * @returns 预约记录数组
+   */
   getAllReservations(): IReservation[] {
     return this.db
       .prepare(
@@ -686,7 +757,11 @@ export class BorrowService {
       .all() as IReservation[]
   }
 
-  // 获取图书的预约记录（排除已删除读者）
+  /**
+   * 获取图书的预约记录（排除已删除读者）
+   * @param bookId 图书ID
+   * @returns 该图书的预约记录数组
+   */
   getBookReservations(bookId: number): IReservation[] {
     return this.db
       .prepare(
@@ -702,7 +777,11 @@ export class BorrowService {
       .all(bookId) as IReservation[]
   }
 
-  // 获取读者的预约记录（排除已删除图书）
+  /**
+   * 获取读者的预约记录（排除已删除图书）
+   * @param readerId 读者ID
+   * @returns 该读者的预约记录数组
+   */
   getReaderReservations(readerId: number): IReservation[] {
     return this.db
       .prepare(
@@ -717,7 +796,10 @@ export class BorrowService {
       .all(readerId) as IReservation[]
   }
 
-  // 获取所有借阅历史记录（包括已删除的图书和读者，仅管理员使用）
+  /**
+   * 获取所有借阅历史记录（包括已删除的图书和读者，仅管理员使用）
+   * @returns 所有借阅记录数组
+   */
   getAllBorrowHistory(): IBorrowRecord[] {
     return this.db
       .prepare(
@@ -733,21 +815,26 @@ export class BorrowService {
       .all() as IBorrowRecord[]
   }
 
-  // 更新逾期状态（系统定时任务调用）
+  /**
+   * 更新逾期状态（系统定时任务调用）
+   * 将已超过应还日期但未标记为逾期的借阅记录状态更新为逾期
+   * @returns 操作结果，包含更新记录数和消息
+   */
   updateOverdueStatus(): { updated: number; message: string } {
     try {
       // 开始事务
       this.db.prepare('BEGIN').run()
 
       // 更新所有逾期但状态不是已归还的借阅记录
+      // 将状态更新为逾期（状态3）
       const result = this.db
         .prepare(
           `
         UPDATE borrow_record
         SET status = 3
         WHERE due_date < date('now')
-        AND status != 2
-        AND status != 3
+        AND status != 2  -- 非已归还
+        AND status != 3  -- 非已逾期
       `
         )
         .run()
@@ -770,13 +857,17 @@ export class BorrowService {
     }
   }
 
-  // 更新预约过期状态（系统定时任务调用）
+  /**
+   * 更新预约过期状态（系统定时任务调用）
+   * 将已超过预约期限但未处理的预约记录标记为过期
+   * @returns 操作结果，包含更新记录数和消息
+   */
   updateExpiredReservations(): { updated: number; message: string } {
     try {
       // 开始事务
       this.db.prepare('BEGIN').run()
 
-      // 查询需要处理的预约记录
+      // 查询需要处理的预约记录（已过期但状态仍为待处理）
       const expiredReservations = this.db
         .prepare(
           `
@@ -792,7 +883,7 @@ export class BorrowService {
 
       // 更新每条过期的预约记录
       for (const reservation of expiredReservations) {
-        // 更新预约状态为已过期
+        // 更新预约状态为已过期（状态3）
         this.db
           .prepare('UPDATE reservation SET status = 3 WHERE reservation_id = ?')
           .run(reservation.reservation_id)
@@ -816,6 +907,7 @@ export class BorrowService {
             .prepare('SELECT status FROM book WHERE book_id = ?')
             .get(reservation.book_id) as { status: number } | undefined
 
+          // 如果图书状态为已预约（状态3），则更新为在库（状态1）
           if (book && book.status === 3) {
             this.db.prepare('UPDATE book SET status = 1 WHERE book_id = ?').run(reservation.book_id)
           }
