@@ -1,11 +1,10 @@
 import Database from 'better-sqlite3'
-import { app } from 'electron'
 import path from 'path'
 import fs from 'fs'
 
 // 数据库文件路径
 // 使用Electron的app.getPath获取用户数据目录，确保数据库文件存储在适当位置
-const dbPath = path.join(app.getPath('userData'), 'library.db')
+const dbPath = './database.db'
 
 // 初始化数据库函数
 // 该函数负责创建数据库连接、创建表结构并初始化基础数据
